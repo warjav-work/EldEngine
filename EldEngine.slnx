@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="EldEngine.Core/EldEngine.Core.csproj" />
+  <Project Path="EldEngine.Editor/EldEngine.Editor.csproj" />
+  <Project Path="EldEngine.GameTest/EldEngine.GameTest.csproj" />
+  <Project Path="EldEngine.Tests/EldEngine.Tests.csproj" />
+</Solution>

@@ -1,0 +1,474 @@
+﻿using EldEngine.Core.Application.Interfaces;
+using EldEngine.Core.Application.Services;
+using EldEngine.Core.Domain.Systems;
+using EldEngine.Core.Domain.Values;
+using EldEngine.GameTest.GameStates;
+using EldEngine.GameTest.Inputs;
+using EldEngine.GameTest.Rendering;
+using EldEngine.GameTest.Scenes;
+using EldEngine.GameTest.Systems;
+using System.Diagnostics;
+using Timer = System.Windows.Forms.Timer;
+
+namespace EldEngine.GameTest
+{
+    /// <summary>
+    /// Ventana principal del juego con integración del motor ECS.
+    /// </summary>
+    public partial class GameWindow : Form
+    {
+        // Motor ECS
+        private IGameService _gameService;
+        private ISceneService _sceneService;
+        private IInputService _inputService;
+        private Timer _uiUpdateTimer;
+
+        // Game Manager
+        private GameManager _gameManager;
+
+        // Rendering
+        private GameRenderContext _renderContext;
+        private Stopwatch _gameTimer;
+        private float _deltaTime;
+
+        // UI
+        private Label _fpsLabel;
+        private Label _entityCountLabel;
+        private Label _statusLabel;
+        private Label _scoreLabel;
+        private Label _stateLabel;
+        private Label _messageLabel;
+        private Timer _messageTimer;
+        public GameWindow()
+        {
+            InitializeComponent();
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            this.Focus();
+            InitializeGame();
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
+            _gameService?.Dispose();
+            _gameTimer?.Stop();
+            _messageTimer?.Stop();
+        }
+
+        /// <summary>
+        /// Inicializa el motor ECS y la ventana.
+        /// </summary>
+        private void InitializeGame()
+        {
+            try
+            {
+                // Configurar ventana
+                this.Text = "Elder: Chronicles of the Silver Grove";
+                this.Size = new System.Drawing.Size(1024, 768);
+                this.StartPosition = FormStartPosition.CenterScreen;
+                this.DoubleBuffered = true;
+                this.BackColor = System.Drawing.Color.Black;
+
+                // Crear servicios del motor
+                _sceneService = new SceneService();
+                _inputService = new WindowsFormsInputService(this);
+                _gameService = new GameService(_sceneService, _inputService);
+
+                // Registrar escenas
+                _sceneService.RegisterScene("Main", new MainScene());
+                _sceneService.RegisterScene("Combat", new CombatScene());
+
+                // Inicializar motor
+                _gameService.Initialize();
+
+                // Registrar sistemas
+                _gameService.World.AddSystem(new PlayerInputSystem(_inputService));
+                _gameService.World.AddSystem(new MovementSystem());
+                _gameService.World.AddSystem(new NpcInteractionSystem());
+                _gameService.World.AddSystem(new CombatSystem());
+                //_gameService.World.AddSystem(new GravitySystem());
+
+                // Crear GameManager
+                _gameManager = new GameManager();
+                _gameManager.Initialize(_gameService);
+
+                // Suscribirse a eventos
+                _gameManager.OnGameStateChanged += OnGameStateChanged;
+                _gameManager.OnGameMessage += OnGameMessage;
+
+                // Cargar escena inicial
+                _gameService.LoadScene("Main");
+
+                // Inicializar contexto de rendering
+                _renderContext = new GameRenderContext(this);
+
+                // Crear controles UI
+                CreateUIControls();
+
+                // Iniciar game loop
+                _gameTimer = Stopwatch.StartNew();
+                this.Paint += GameWindow_Paint;
+                this.Resize += GameWindow_Resize;
+                this.KeyDown += GameWindow_KeyDown;
+
+                // Timer para actualizar UI (30 FPS)
+                _messageTimer = new Timer();
+                _messageTimer.Interval = 33;
+                _messageTimer.Tick += UIUpdateTimer_Tick;
+                _messageTimer.Start();
+
+                // Forzar render continuo
+                this.SetStyle(ControlStyles.AllPaintingInWmPaint |
+                              ControlStyles.UserPaint |
+                              ControlStyles.Opaque, true);
+
+                // Invalidate cada frame
+                var gameLoopTimer = new Timer();
+                gameLoopTimer.Interval = 16; // ~60 FPS
+                gameLoopTimer.Tick += (s, e) => this.Invalidate();
+                gameLoopTimer.Start();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error inicializando juego: {ex.Message}\n\n{ex.StackTrace}",
+                    "Error Fatal", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                this.Close();
+            }
+        }
+
+        private void GameWindow_KeyDown(object? sender, KeyEventArgs e)
+        {
+            switch (e.KeyCode)
+            {
+                case Keys.Escape:
+                    if (_gameManager.IsPlaying)
+                    {
+                        _gameManager.TogglePause();
+                    }
+                    else if (_gameManager.IsPaused)
+                    {
+                        _gameManager.SetGameState(GameState.Playing);
+                    }
+                    e.Handled = true;
+                    break;
+
+                case Keys.R:
+                    _gameManager.Restart();
+                    e.Handled = true;
+                    break;
+
+                case Keys.M:
+                    _gameManager.SetGameState(GameState.Menu);
+                    e.Handled = true;
+                    break;
+
+                case Keys.Space:
+                    if (_gameManager.IsMenu)
+                    {
+                        _gameManager.SetGameState(GameState.Playing);
+                        e.Handled = true;
+                    }
+                    break;
+
+                case Keys.P:
+                    // Agregar puntos (para testing)
+                    _gameManager.AddScore(10);
+                    e.Handled = true;
+                    break;
+
+                case Keys.L:
+                    // Siguiente nivel (para testing)
+                    _gameManager.NextLevel();
+                    e.Handled = true;
+                    break;
+
+                case Keys.G:
+                    // Game over (para testing)
+                    _gameManager.GameOver("Tecla G presionada");
+                    e.Handled = true;
+                    break;
+            }
+        }
+
+        private void OnGameMessage(string message)
+        {
+            _messageLabel.Text = message;
+            _messageLabel.Visible = true;
+
+            // Ocultar después de 3 segundos
+            var timer = new Timer();
+            timer.Interval = 3000;
+            timer.Tick += (s, e) =>
+            {
+                _messageLabel.Visible = false;
+                timer.Stop();
+                timer.Dispose();
+            };
+            timer.Start();
+        }
+
+        private void OnGameStateChanged(GameState newState)
+        {
+            System.Diagnostics.Debug.WriteLine($"Estado cambió a: {newState}");
+        }
+
+        private void UIUpdateTimer_Tick(object? sender, EventArgs e)
+        {
+            if (_gameManager == null) return;
+
+            // Actualizar UI
+            var fps = (int)(1f / (_deltaTime > 0 ? _deltaTime : 0.016f));
+            var entityCount = _gameService.World.GetEntitiesWith<Transform>().Count();
+
+            _statusLabel.Text = $"FPS: {fps} | Entities: {entityCount} | Time: {_gameManager.PlayTime:F1}s";
+            _scoreLabel.Text = $"Score: {_gameManager.CurrentScore} | Level: {_gameManager.CurrentLevel}";
+
+            // Estado visual
+            var stateIcon = _gameManager.CurrentState switch
+            {
+                GameState.Playing => "▶️",
+                GameState.Paused => "⏸️",
+                GameState.GameOver => "💀",
+                GameState.Menu => "🎮",
+                _ => "❓"
+            };
+
+            _stateLabel.Text = $"{stateIcon} {_gameManager.CurrentState}";
+            _stateLabel.ForeColor = _gameManager.CurrentState switch
+            {
+                GameState.Playing => System.Drawing.Color.Lime,
+                GameState.Paused => System.Drawing.Color.Yellow,
+                GameState.GameOver => System.Drawing.Color.Red,
+                GameState.Menu => System.Drawing.Color.Cyan,
+                _ => System.Drawing.Color.White
+            };
+        }
+
+        private void GameWindow_Resize(object? sender, EventArgs e)
+        {
+            this.Invalidate();
+        }
+
+        private void GameWindow_Paint(object? sender, PaintEventArgs e)
+        {
+            try
+            {
+                _deltaTime = (float)_gameTimer.Elapsed.TotalSeconds;
+                _gameTimer.Restart();
+
+                if (_deltaTime > 0.05f) _deltaTime = 0.05f; // Cap deltaTime
+
+                // Actualizar GameManager
+                _gameManager.Update(_deltaTime);
+
+                // Solo actualizar lógica si no está pausado
+                if (_gameManager.IsPlaying)
+                {
+                    _gameService.Update(_deltaTime);
+                }
+
+                // Renderizar siempre
+                _renderContext.Render(e.Graphics, _gameService.World, this.ClientSize);
+
+                // Renderizar overlay según estado
+                RenderStateOverlay(e.Graphics);
+            }
+            catch (Exception ex)
+            {
+                e.Graphics.DrawString($"Error: {ex.Message}",
+                    new System.Drawing.Font("Arial", 10),
+                    System.Drawing.Brushes.Red, 10, 10);
+            }
+        }
+
+        private void RenderStateOverlay(Graphics g)
+        {
+            switch (_gameManager.CurrentState)
+            {
+                case GameState.Paused:
+                    RenderPauseOverlay(g);
+                    break;
+
+                case GameState.GameOver:
+                    RenderGameOverOverlay(g);
+                    break;
+
+                case GameState.Menu:
+                    RenderMenuOverlay(g);
+                    break;
+            }
+        }
+
+        private void RenderMenuOverlay(Graphics g)
+        {
+            g.FillRectangle(
+                new System.Drawing.SolidBrush(System.Drawing.Color.Black),
+                0, 0, this.ClientSize.Width, this.ClientSize.Height);
+
+            var centerX = this.ClientSize.Width / 2;
+            var centerY = this.ClientSize.Height / 2;
+
+            // Title
+            var titleFont = new System.Drawing.Font("Arial", 48f, System.Drawing.FontStyle.Bold);
+            var titleText = "ELDER";
+            var titleSize = g.MeasureString(titleText, titleFont);
+            g.DrawString(titleText, titleFont,
+                System.Drawing.Brushes.Cyan,
+                centerX - titleSize.Width / 2,
+                centerY - 150);
+
+            // Subtitle
+            var subtitleFont = new System.Drawing.Font("Arial", 18f);
+            g.DrawString("Chronicles of the Silver Grove",
+                subtitleFont,
+                System.Drawing.Brushes.LimeGreen,
+                centerX - 200,
+                centerY - 80);
+
+            // Menu options
+            var menuFont = new System.Drawing.Font("Arial", 16f);
+            g.DrawString("Press SPACE to Start",
+                menuFont,
+                System.Drawing.Brushes.White,
+                centerX - 150,
+                centerY + 50);
+
+            g.DrawString("Controls: WASD/Arrows to Move | SPACE to Dash | ESC to Pause",
+                new System.Drawing.Font("Arial", 12f),
+                System.Drawing.Brushes.LightGray,
+                centerX - 350,
+                centerY + 150);
+        }
+
+        private void RenderGameOverOverlay(Graphics g)
+        {
+            g.FillRectangle(
+                new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(150, 0, 0, 0)),
+                0, 0, this.ClientSize.Width, this.ClientSize.Height);
+
+            var centerX = this.ClientSize.Width / 2;
+            var centerY = this.ClientSize.Height / 2;
+
+            // Game Over text
+            var gameOverFont = new System.Drawing.Font("Arial", 52f, System.Drawing.FontStyle.Bold);
+            var gameOverText = "💀 GAME OVER 💀";
+            var gameOverSize = g.MeasureString(gameOverText, gameOverFont);
+            g.DrawString(gameOverText, gameOverFont,
+                System.Drawing.Brushes.Red,
+                centerX - gameOverSize.Width / 2,
+                centerY - 100);
+
+            // Score
+            var scoreFont = new System.Drawing.Font("Arial", 20f);
+            g.DrawString($"Final Score: {_gameManager.CurrentScore}",
+                scoreFont,
+                System.Drawing.Brushes.Yellow,
+                centerX - 150,
+                centerY + 20);
+
+            g.DrawString($"Level: {_gameManager.CurrentLevel}",
+                scoreFont,
+                System.Drawing.Brushes.Yellow,
+                centerX - 150,
+                centerY + 60);
+
+            // Instructions
+            var infoFont = new System.Drawing.Font("Arial", 14f);
+            g.DrawString("Press R to Restart | M for Menu",
+                infoFont,
+                System.Drawing.Brushes.White,
+                centerX - 200,
+                centerY + 130);
+        }
+
+        private void RenderPauseOverlay(Graphics g)
+        {
+            // Oscurecer pantalla
+            g.FillRectangle(
+                new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(100, 0, 0, 0)),
+                0, 0, this.ClientSize.Width, this.ClientSize.Height);
+
+            var centerX = this.ClientSize.Width / 2;
+            var centerY = this.ClientSize.Height / 2;
+
+            // Texto "PAUSED"
+            var pauseFont = new System.Drawing.Font("Arial", 48f, System.Drawing.FontStyle.Bold);
+            var pauseText = "⏸️ PAUSED";
+            var pauseSize = g.MeasureString(pauseText, pauseFont);
+            g.DrawString(pauseText, pauseFont,
+                System.Drawing.Brushes.Yellow,
+                centerX - pauseSize.Width / 2,
+                centerY - 100);
+
+            // Instrucciones
+            var infoFont = new System.Drawing.Font("Arial", 14f);
+            g.DrawString("Press ESC to Resume | R to Restart | M for Menu",
+                infoFont,
+                System.Drawing.Brushes.White,
+                centerX - 250,
+                centerY + 50);
+        }
+
+        private void CreateUIControls()
+        {
+            // Estado del juego
+            _stateLabel = new Label
+            {
+                Text = "🎮 PLAYING",
+                ForeColor = System.Drawing.Color.Lime,
+                BackColor = System.Drawing.Color.Transparent,
+                AutoSize = true,
+                Location = new System.Drawing.Point(10, 10),
+                Font = new System.Drawing.Font("Consolas", 12f, System.Drawing.FontStyle.Bold)
+            };
+            this.Controls.Add(_stateLabel);
+            _stateLabel.BringToFront();
+
+            // Score
+            _scoreLabel = new Label
+            {
+                Text = "Score: 0",
+                ForeColor = System.Drawing.Color.Yellow,
+                BackColor = System.Drawing.Color.Transparent,
+                AutoSize = true,
+                Location = new System.Drawing.Point(10, 40),
+                Font = new System.Drawing.Font("Consolas", 11f, System.Drawing.FontStyle.Bold)
+            };
+            this.Controls.Add(_scoreLabel);
+            _scoreLabel.BringToFront();
+
+            // Status
+            _statusLabel = new Label
+            {
+                Text = "FPS: 0 | Entities: 0",
+                ForeColor = System.Drawing.Color.Cyan,
+                BackColor = System.Drawing.Color.Transparent,
+                AutoSize = true,
+                Location = new System.Drawing.Point(10, 70),
+                Font = new System.Drawing.Font("Consolas", 9f)
+            };
+            this.Controls.Add(_statusLabel);
+            _statusLabel.BringToFront();
+
+            // Mensaje temporal
+            _messageLabel = new Label
+            {
+                Text = "",
+                ForeColor = System.Drawing.Color.LimeGreen,
+                BackColor = System.Drawing.Color.Transparent,
+                AutoSize = false,
+                Location = new System.Drawing.Point(this.Width / 2 - 200, 100),
+                Width = 400,
+                Height = 60,
+                Font = new System.Drawing.Font("Arial", 14f, System.Drawing.FontStyle.Bold),
+                TextAlign = System.Drawing.ContentAlignment.TopCenter
+            };
+            this.Controls.Add(_messageLabel);
+            _messageLabel.BringToFront();
+        }
+    }
+}
