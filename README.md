@@ -5,7 +5,7 @@
 2. [Arquitectura del Sistema](#arquitectura-del-sistema)
 3. [Patrón ECS](#patrón-ecs)
 4. [Estructura de Carpetas](#estructura-de-carpetas)
-5. [Proyecto de Ejemplo: Eldoria](#proyecto-de-ejemplo-eldoria)
+5. [Proyecto de Ejemplo: Elder](#proyecto-de-ejemplo-elder)
 6. [Guía de Desarrollo](#guía-de-desarrollo)
 
 ---
@@ -156,7 +156,7 @@ ElEngine.sln
 │   │   └── ProjectService.cs
 │   └── App.xaml
 │
-├── Eldoria.Game/                  # Proyecto de ejemplo
+├── Elder.Game/                  # Proyecto de ejemplo
 │   ├── Components/
 │   │   ├── PlayerController.cs
 │   │   ├── NpcBehavior.cs
@@ -181,9 +181,9 @@ ElEngine.sln
 
 ---
 
-## Proyecto de Ejemplo: Eldoria
+## Proyecto de Ejemplo: Elder
 
-### "Eldoria: Chronicles of the Silver Grove"
+### "Elder: Chronicles of the Silver Grove"
 
 **Género**: Aventura 2D narrativa con combates ligeros  
 **Mecánicas**:
@@ -318,4 +318,4 @@ Return to MainScene
 
 Este motor proporciona una **base sólida, escalable y profesional** para desarrollar juegos 2D complejos. La combinación de ECS + Arquitectura Limpia garantiza mantenibilidad y extensibilidad a largo plazo.
 
-El proyecto Eldoria demuestra cómo aplicar estos conceptos en un juego real, sirviendo como guía para proyectos futuros.
+El proyecto Elder demuestra cómo aplicar estos conceptos en un juego real, sirviendo como guía para proyectos futuros.

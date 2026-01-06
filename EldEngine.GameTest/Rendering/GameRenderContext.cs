@@ -138,7 +138,7 @@ namespace EldEngine.GameTest.Rendering
             var textBrush = Brushes.LimeGreen;
             var padding = 10;
 
-            g.DrawString("ELDORIA ENGINE v1.0", uiFont, Brushes.White,
+            g.DrawString("ELD ENGINE v1.0", uiFont, Brushes.White,
                 screenSize.Width - 250, padding);
 
             g.DrawString("CONTROLES:", new Font("Consolas", 9), Brushes.Cyan,
