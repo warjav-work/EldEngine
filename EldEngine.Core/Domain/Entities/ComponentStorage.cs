@@ -3,7 +3,7 @@
     /// <summary>
     /// Almacenamiento sparse set de componentes para máximo rendimiento.
     /// </summary>
-    internal class ComponentStorage
+    public class ComponentStorage
     {
         private readonly Dictionary<Type, SparseSet> _storages = new();
 

@@ -1,4 +1,6 @@
 ﻿using EldEngine.Core.Application.Interfaces;
+using EldEngine.Core.Domain.Values;
+using EldEngine.Core.Domain.Worlds;
 using EldEngine.GameTest.GameStates;
 using System;
 using System.Collections.Generic;
@@ -15,6 +17,7 @@ namespace EldEngine.GameTest.Scenes
 
         private int _currentLevelIndex = 0;
         private List<string> _levelSequence = new();
+        private IScene _currentScene = null;
 
         public int CurrentLevel => _currentLevelIndex + 1;
         public int TotalLevels => _levelSequence.Count;
@@ -62,13 +65,48 @@ namespace EldEngine.GameTest.Scenes
                 System.Diagnostics.Debug.WriteLine("❌ Índice de nivel inválido");
                 return;
             }
+            // Limpiar escena anterior
+            if (_currentScene != null)
+            {
+                System.Diagnostics.Debug.WriteLine($"🧹 Limpiando escena anterior...");
+                _currentScene.Cleanup(_gameService.World);
+            }
 
+            // Limpiar todas las entidades del mundo
+            ClearAllEntities(_gameService.World);
+
+            // Cargar nueva escena
             _currentLevelIndex = levelIndex;
             var levelName = _levelSequence[_currentLevelIndex];
 
-            System.Diagnostics.Debug.WriteLine($"[LEVEL] Cargando {levelName}...");
-            _gameService.LoadScene(levelName);
+            System.Diagnostics.Debug.WriteLine($"\n[LEVEL] Cargando {levelName}...");
+            _currentScene = _sceneService.GetScene(levelName);
+            _currentScene.Initialize(_gameService.World);
+
             _gameManager.CurrentLevel = CurrentLevel;
+
+            System.Diagnostics.Debug.WriteLine($"✓ Nivel {CurrentLevel} cargado\n");
+        }
+
+        private void ClearAllEntities(World world)
+        {
+            //world.ClearAll();
+            
+            // Obtener todas las entidades antes de limpiar
+            var allEntities = world.GetEntitiesWith<Transform>().ToList();
+
+            System.Diagnostics.Debug.WriteLine($"🧹 Destruyendo {allEntities.Count} entidades...");
+
+            // Destruir cada una
+            foreach (var entity in allEntities)
+            {
+                if (entity.IsValid)
+                {
+                    world.DestroyEntity(entity);
+                }
+            }
+
+            System.Diagnostics.Debug.WriteLine($"✓ Todas las entidades destruidas");
         }
 
         public void LoadCurrentLevel()

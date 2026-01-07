@@ -205,8 +205,9 @@ namespace EldEngine.GameTest
                     {
                         _levelManager.RestartLevel();
                         _gameManager.Restart();
+                        _gameManager.SetGameState(GameState.Playing);
+                        e.Handled = true;
                     }
-                    e.Handled = true;
                     break;
 
                 case Keys.M:
@@ -233,7 +234,7 @@ namespace EldEngine.GameTest
                     if (_gameManager.IsPlaying)
                     {
                         _levelManager.NextLevel();
-                        _gameManager.SetGameState(GameState.Playing);
+                        //_gameManager.SetGameState(GameState.Playing);
                         e.Handled = true;
                     }
                     break;

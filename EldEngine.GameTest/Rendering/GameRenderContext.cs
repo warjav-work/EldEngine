@@ -27,11 +27,57 @@ namespace EldEngine.GameTest.Rendering
                 RenderBackground(g, screenSize);
 
                 // Renderizar entidades
-                var entities = world.GetEntitiesWith<Transform>();
-                foreach (var entity in entities)
+                var allEntities = world.GetEntitiesWith<Transform>().ToList();
+
+                // Separar por tipo para controlar orden de renderizado
+                var walls = new List<Entity>();
+                var obstacles = new List<Entity>();
+                var npcs = new List<Entity>();
+                var enemies = new List<Entity>();
+                var players = new List<Entity>();
+                var other = new List<Entity>();
+
+                foreach (var entity in allEntities)
                 {
-                    RenderEntity(g, world, entity);
+                    if (!entity.IsValid) continue;
+
+                    if (world.HasComponent<PlayerController>(entity))
+                        players.Add(entity);
+                    else if (world.HasComponent<ObstacleComponent>(entity))
+                    {
+                        var obs = world.GetComponent<ObstacleComponent>(entity);
+                        if (obs.ObstacleType == "wall")
+                            walls.Add(entity);
+                        else
+                            obstacles.Add(entity);
+                    }
+                    else if (world.HasComponent<EnemyAIComponent>(entity))
+                        enemies.Add(entity);
+                    else if (world.HasComponent<NpcBehavior>(entity))
+                        npcs.Add(entity);
+                    else
+                        other.Add(entity);
                 }
+
+
+                // Renderizar en orden (back to front)
+                foreach (var entity in walls)
+                    RenderEntity(g, world, entity, Color.Gray);
+
+                foreach (var entity in obstacles)
+                    RenderEntity(g, world, entity, Color.SaddleBrown);
+
+                foreach (var entity in enemies)
+                    RenderEntity(g, world, entity, Color.Red);
+
+                foreach (var entity in npcs)
+                    RenderEntity(g, world, entity, Color.Cyan);
+
+                foreach (var entity in players)
+                    RenderEntity(g, world, entity, Color.Lime);
+
+                foreach (var entity in other)
+                    RenderEntity(g, world, entity, Color.White);
 
                 // Renderizar UI
                 RenderUI(g, screenSize);
@@ -43,7 +89,7 @@ namespace EldEngine.GameTest.Rendering
                     Brushes.Red, 10, 10);
             }
         }
-
+        /*
         private void RenderBackground(Graphics g, System.Drawing.Size screenSize)
         {
             // Simple starfield
@@ -57,77 +103,198 @@ namespace EldEngine.GameTest.Rendering
 
                 g.FillEllipse(new SolidBrush(color), x, y, 1, 1);
             }
-        }
+        }*/
 
-        private void RenderEntity(Graphics g, World world, Entity entity)
+        /// <summary>Renderiza una entidad individual con su collider si existe</summary>
+        private void RenderEntity(Graphics g, World world, Entity entity, Color baseColor)
         {
             var transform = world.GetComponent<Transform>(entity);
 
-            // Determinar color y tamaño según tipo
-            Color color = Color.White;
-            float size = 16f;
+            // Obtener tamaño del collider si existe
+            float width = 16;
+            float height = 16;
+            string label = "";
 
-            if (world.HasComponent<PlayerController>(entity))
+            if (world.HasComponent<ColliderComponent>(entity))
             {
-                color = Color.Lime;
-                size = 20f;
-            }
-            else if (world.HasComponent<NpcBehavior>(entity))
-            {
-                color = Color.Cyan;
-                size = 16f;
-            }
-            else if (world.HasComponent<CombatStats>(entity))
-            {
-                color = Color.Red;
-                size = 14f;
+                var collider = world.GetComponent<ColliderComponent>(entity);
+                width = collider.Width;
+                height = collider.Height;
+                label = collider.Tag;
             }
 
-            // Renderizar como círculo (placeholder)
+            // Calcular rectángulo
             var rect = new RectangleF(
-                transform.X - size / 2,
-                transform.Y - size / 2,
-                size,
-                size);
+                transform.X - width / 2,
+                transform.Y - height / 2,
+                width,
+                height);
 
-            g.FillEllipse(new SolidBrush(color), rect);
-            g.DrawEllipse(new Pen(Color.White, 2), rect);
-
-            // Renderizar nombre si es NPC
-            if (world.HasComponent<NpcBehavior>(entity))
+            // Renderizar según tipo
+            if (world.HasComponent<ObstacleComponent>(entity))
             {
-                var npc = world.GetComponent<NpcBehavior>(entity);
-                g.DrawString(npc.NpcName,
-                    new Font("Arial", 8),
-                    Brushes.Cyan,
-                    transform.X - 20,
-                    transform.Y - 25);
+                RenderObstacle(g, world, entity, rect, baseColor);
+            }
+            else if (world.HasComponent<EnemyAIComponent>(entity))
+            {
+                RenderEnemy(g, world, entity, rect, baseColor);
+            }
+            else if (world.HasComponent<PlayerController>(entity))
+            {
+                RenderPlayer(g, world, entity, rect, baseColor);
+            }
+            else
+            {
+                // Entidad genérica
+                g.FillRectangle(new SolidBrush(baseColor), rect);
+                g.DrawRectangle(new Pen(Color.White, 1), rect);
             }
 
-            // Renderizar salud si tiene
+            // Renderizar salud si la tiene
             if (world.HasComponent<CombatStats>(entity))
             {
-                var stats = world.GetComponent<CombatStats>(entity);
-                var healthPercent = (float)stats.CurrentHealth / stats.MaxHealth;
+                RenderHealthBar(g, world, entity, rect);
+            }
+        }
+        /// <summary>Renderiza obstáculos (árboles, rocas, paredes)</summary>
+        private void RenderObstacle(Graphics g, World world, Entity entity, RectangleF rect, Color baseColor)
+        {
+            var obstacle = world.GetComponent<ObstacleComponent>(entity);
 
-                // Barra de vida
-                var healthBarWidth = 30;
-                var healthBarHeight = 4;
-                var healthBarX = transform.X - healthBarWidth / 2;
-                var healthBarY = transform.Y + size / 2 + 5;
+            // Dibujar rectángulo del obstáculo
+            g.FillRectangle(new SolidBrush(baseColor), rect);
 
-                // Fondo (rojo)
-                g.FillRectangle(Brushes.DarkRed,
-                    healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+            // Borde
+            var borderColor = Color.FromArgb(100, 0, 0, 0);
+            g.DrawRectangle(new Pen(borderColor, 2), rect);
 
-                // Vida (verde)
-                g.FillRectangle(Brushes.LimeGreen,
-                    healthBarX, healthBarY,
-                    healthBarWidth * healthPercent, healthBarHeight);
+            // Mostrar tipo de obstáculo
+            var typeChar = obstacle.ObstacleType switch
+            {
+                "wall" => "W",
+                "tree" => "🌳",
+                "rock" => "⬜",
+                "door" => "D",
+                _ => "?"
+            };
 
-                // Borde
-                g.DrawRectangle(Pens.White,
-                    healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+            g.DrawString(typeChar,
+                new Font("Arial", 10, FontStyle.Bold),
+                Brushes.White,
+                rect.X + rect.Width / 2 - 5,
+                rect.Y + rect.Height / 2 - 7);
+        }
+        /// <summary>Renderiza enemigos con IA visible</summary>
+        private void RenderEnemy(Graphics g, World world, Entity entity, RectangleF rect, Color baseColor)
+        {
+            var ai = world.GetComponent<EnemyAIComponent>(entity);
+
+            // Círculo para enemigos
+            g.FillEllipse(new SolidBrush(baseColor), rect);
+
+            // Borde según estado de IA
+            Color borderColor = ai.CanSeePlayer ? Color.Orange : Color.White;
+            float borderWidth = ai.CanSeePlayer ? 3 : 1.5f;
+
+            g.DrawEllipse(new Pen(borderColor, borderWidth), rect);
+
+            // Mostrar tipo de IA
+            var aiChar = ai.AIType switch
+            {
+                "patrol" => "P",
+                "follow" => "F",
+                "aggressive" => "A",
+                _ => "?"
+            };
+
+            g.DrawString(aiChar,
+                new Font("Arial", 12, FontStyle.Bold),
+                Brushes.White,
+                rect.X + rect.Width / 2 - 5,
+                rect.Y + rect.Height / 2 - 7);
+
+            // Mostrar rango de detección si ve al jugador
+            if (ai.CanSeePlayer)
+            {
+                g.DrawEllipse(new Pen(Color.FromArgb(50, Color.Orange), 1),
+                    rect.X - ai.DetectionRange / 2,
+                    rect.Y - ai.DetectionRange / 2,
+                    ai.DetectionRange,
+                    ai.DetectionRange);
+            }
+        }
+
+        /// <summary>Renderiza el jugador</summary>
+        private void RenderPlayer(Graphics g, World world, Entity entity, RectangleF rect, Color baseColor)
+        {
+            var controller = world.GetComponent<PlayerController>(entity);
+
+            // Cuadrado para jugador
+            g.FillRectangle(new SolidBrush(baseColor), rect);
+
+            // Borde destacado
+            g.DrawRectangle(new Pen(Color.Yellow, 3), rect);
+
+            // Mostrar velocidad del dash
+            if (!controller.CanDash)
+            {
+                var dashPercent = (1f - controller.DashCooldown) * 100;
+                g.DrawString($"D:{dashPercent:F0}%",
+                    new Font("Arial", 8),
+                    Brushes.Yellow,
+                    rect.X + 2,
+                    rect.Y - 15);
+            }
+        }
+
+        /// <summary>Renderiza barra de vida</summary>
+        private void RenderHealthBar(Graphics g, World world, Entity entity, RectangleF rect)
+        {
+            var stats = world.GetComponent<CombatStats>(entity);
+
+            if (stats.MaxHealth <= 0) return;
+
+            float healthPercent = (float)stats.CurrentHealth / stats.MaxHealth;
+            float barWidth = rect.Width;
+            float barHeight = 3;
+            float barX = rect.X;
+            float barY = rect.Y - 8;
+
+            // Fondo (rojo)
+            g.FillRectangle(Brushes.DarkRed, barX, barY, barWidth, barHeight);
+
+            // Vida (verde)
+            var healthColor = healthPercent > 0.5f ? Color.LimeGreen :
+                             healthPercent > 0.25f ? Color.Yellow : Color.Red;
+
+            g.FillRectangle(new SolidBrush(healthColor), barX, barY, barWidth * healthPercent, barHeight);
+
+            // Borde
+            g.DrawRectangle(new Pen(Color.White, 0.5f), barX, barY, barWidth, barHeight);
+
+            // Mostrar números
+            g.DrawString($"{stats.CurrentHealth}/{stats.MaxHealth}",
+                new Font("Arial", 7),
+                Brushes.White,
+                barX + 2,
+                barY - 12);
+        }
+
+        /// <summary>Renderiza fondo decorativo</summary>
+        private void RenderBackground(Graphics g, System.Drawing.Size screenSize)
+        {
+            // Patrón de cuadrícula suave
+            float gridSize = 50;
+            var gridPen = new Pen(Color.FromArgb(20, 100, 100, 100), 0.5f);
+
+            for (float x = 0; x < screenSize.Width; x += gridSize)
+            {
+                g.DrawLine(gridPen, (int)x, 0, (int)x, screenSize.Height);
+            }
+
+            for (float y = 0; y < screenSize.Height; y += gridSize)
+            {
+                g.DrawLine(gridPen, 0, (int)y, screenSize.Width, (int)y);
             }
         }
 
