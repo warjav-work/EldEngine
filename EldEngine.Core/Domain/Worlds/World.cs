@@ -11,6 +11,7 @@ namespace EldEngine.Core.Domain.Worlds
         private ComponentStorage _components = new();
         private readonly List<ISystem> _systems = new();
         private readonly Dictionary<Type, Type> _componentMetadata = new();
+        private readonly HashSet<int> _activeEntityIds = new(); // Track de entidades activas
         private int _nextEntityId = 1;
         private bool _isRunning = true;
 
@@ -26,6 +27,7 @@ namespace EldEngine.Core.Domain.Worlds
         public Entity CreateEntity()
         {
             var entity = new Entity(_nextEntityId++);
+            _activeEntityIds.Add(entity.Id); // Registrar nueva entidad
             EntityCreated?.Invoke(entity);
             return entity;
         }
@@ -36,8 +38,12 @@ namespace EldEngine.Core.Domain.Worlds
         public void DestroyEntity(Entity entity)
         {
             if (!entity.IsValid) return;
+            _activeEntityIds.Remove(entity.Id); // Desregistrar entidad
             EntityDestroyed?.Invoke(entity);
         }
+
+        // Obtener todas las entidades activas
+        public IEnumerable<int> GetAllActiveEntityIds() => _activeEntityIds.ToList();
 
         // ==================== COMPONENT MANAGEMENT ====================
 
@@ -161,34 +167,27 @@ namespace EldEngine.Core.Domain.Worlds
 
             try
             {
-                // Notificar destrucción de todas las entidades
-                var allEntities = new List<Entity>();
-                for (int i = 1; i < _nextEntityId; i++)
-                {
-                    var entity = new Entity(i);
-                    if (entity.IsValid)
-                    {
-                        allEntities.Add(entity);
-                    }
-                }
-
-                System.Diagnostics.Debug.WriteLine($"🧹 Destruyendo {allEntities.Count} entidades...");
+                // Obtener lista de IDs activos
+                var idsToDestroy = _activeEntityIds.ToList();
+                Debug.WriteLine($"🧹 Destruyendo {idsToDestroy.Count} entidades...");
 
                 // Destruir cada entidad
-                foreach (var entity in allEntities)
+                foreach (var id in idsToDestroy)
                 {
-                    EntityDestroyed?.Invoke(entity);
+                    var entity = new Entity(id);
+                    EntityDestroyed?.Invoke(entity); // Notificar antes de destruir
+                    _activeEntityIds.Remove(id); // Remover del set
                 }
 
-                // Reinicializar almacenamiento (más eficiente)
+                // Reinicializar almacenamiento
                 _components = new ComponentStorage();
                 _nextEntityId = 1;
 
-                System.Diagnostics.Debug.WriteLine("✓ World completamente limpiado\n");
+                Debug.WriteLine("✓ World completamente limpiado\n");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error limpiando world: {ex.Message}");
+                Debug.WriteLine($"❌ Error limpiando world: {ex.Message}");
                 throw;
             }
         }
@@ -199,6 +198,7 @@ namespace EldEngine.Core.Domain.Worlds
         public void Dispose()
         {
             _isRunning = false;
+            ClearAll();
             _systems.Clear();
             (_components as IDisposable)?.Dispose();
         }        
