@@ -25,8 +25,8 @@ namespace EldEngine.GameTest.GameStates
         public bool IsMenu => _currentState == GameState.Menu;
 
         // Datos del juego
-        public int CurrentScore { get; private set; } = 0;
-        public int CurrentLevel { get; private set; } = 1;
+        public int CurrentScore { get; set; } = 0;
+        public int CurrentLevel { get; set; } = 1;
         public float PlayTime { get; private set; } = 0f;
 
         public void Initialize(IGameService gameService)

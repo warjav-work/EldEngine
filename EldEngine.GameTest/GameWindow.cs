@@ -17,25 +17,28 @@ namespace EldEngine.GameTest
     /// </summary>
     public partial class GameWindow : Form
     {
-        // Motor ECS
+        // ==================== SERVICIOS PRINCIPALES ====================
         private IGameService _gameService;
         private ISceneService _sceneService;
         private IInputService _inputService;
-        private Timer _uiUpdateTimer;
 
-        // Game Manager
+        // ==================== MANAGERS ====================
         private GameManager _gameManager;
+        private LevelManager _levelManager;
 
-        // Rendering
+        // ==================== SISTEMAS ====================
+        private CollisionSystem _collisionSystem;
+        private EnemyAISystem _enemyAISystem;
+
+        // ==================== RENDERING ====================
         private GameRenderContext _renderContext;
         private Stopwatch _gameTimer;
         private float _deltaTime;
 
-        // UI
-        private Label _fpsLabel;
-        private Label _entityCountLabel;
+        // ==================== UI ====================     
         private Label _statusLabel;
         private Label _scoreLabel;
+        private Label _levelLabel;
         private Label _stateLabel;
         private Label _messageLabel;
         private Timer _messageTimer;
@@ -73,43 +76,74 @@ namespace EldEngine.GameTest
                 this.DoubleBuffered = true;
                 this.BackColor = System.Drawing.Color.Black;
 
-                // Crear servicios del motor
+                Debug.WriteLine("╔════════════════════════════════════╗");
+                Debug.WriteLine("║  ELD ENGINE - Inicializando...     ║");
+                Debug.WriteLine("╚════════════════════════════════════╝");
+
+                // 1. Crear servicios del motor
                 _sceneService = new SceneService();
                 _inputService = new WindowsFormsInputService(this);
                 _gameService = new GameService(_sceneService, _inputService);
 
-                // Registrar escenas
-                _sceneService.RegisterScene("Main", new MainScene());
-                _sceneService.RegisterScene("Combat", new CombatScene());
+                Debug.WriteLine("✓ Servicios creados");
 
-                // Inicializar motor
+                // 2. Inicializar motor ECS
                 _gameService.Initialize();
+                Debug.WriteLine("✓ Motor ECS inicializado");        
 
-                // Registrar sistemas
-                _gameService.World.AddSystem(new PlayerInputSystem(_inputService));
-                _gameService.World.AddSystem(new MovementSystem());
+
+                // 3. Crear sistemas de colisión
+                _collisionSystem = new CollisionSystem();
+                _gameService.World.AddSystem(_collisionSystem);
+                Debug.WriteLine("✓ Sistema de colisiones registrado");
+
+                // 4. Crear sistema de IA
+                _enemyAISystem = new EnemyAISystem(_collisionSystem);
+                _gameService.World.AddSystem(_enemyAISystem);
+                Debug.WriteLine("✓ Sistema de IA de enemigos registrado");
+
+                // 5. Registrar sistemas mejorados de input y movimiento
+                _gameService.World.AddSystem(new ImprovedPlayerInputSystem(_inputService, _collisionSystem));
+                Debug.WriteLine("✓ Sistema de input mejorado registrado");
+
+                _gameService.World.AddSystem(new ImprovedMovementSystem(_collisionSystem));
+                Debug.WriteLine("✓ Sistema de movimiento mejorado registrado");
+
+                // 6. Registrar otros sistemas
                 _gameService.World.AddSystem(new NpcInteractionSystem());
                 _gameService.World.AddSystem(new CombatSystem());
+                Debug.WriteLine("✓ Sistemas adicionales registrados");
                 //_gameService.World.AddSystem(new GravitySystem());
 
-                // Crear GameManager
+                // 7. Crear GameManager
                 _gameManager = new GameManager();
                 _gameManager.Initialize(_gameService);
 
                 // Suscribirse a eventos
                 _gameManager.OnGameStateChanged += OnGameStateChanged;
                 _gameManager.OnGameMessage += OnGameMessage;
+                Debug.WriteLine("✓ GameManager inicializado");
 
-                // Cargar escena inicial
-                _gameService.LoadScene("Main");
+                // Registrar escenas
+                _sceneService.RegisterScene("Main", new MainScene());
+                _sceneService.RegisterScene("Combat", new CombatScene());
 
-                // Inicializar contexto de rendering
+
+
+                // 8. Crear LevelManager
+                _levelManager = new LevelManager();
+                _levelManager.Initialize(_gameService, _sceneService, _gameManager);
+                Debug.WriteLine("✓ LevelManager inicializado con 5 niveles");
+
+                // 9. Inicializar rendering
                 _renderContext = new GameRenderContext(this);
+                Debug.WriteLine("✓ Contexto de renderizado inicializado");
 
-                // Crear controles UI
+                // 10. Crear UI
                 CreateUIControls();
+                Debug.WriteLine("✓ UI creada");
 
-                // Iniciar game loop
+                // 11. Iniciar game loop
                 _gameTimer = Stopwatch.StartNew();
                 this.Paint += GameWindow_Paint;
                 this.Resize += GameWindow_Resize;
@@ -131,9 +165,19 @@ namespace EldEngine.GameTest
                 gameLoopTimer.Interval = 16; // ~60 FPS
                 gameLoopTimer.Tick += (s, e) => this.Invalidate();
                 gameLoopTimer.Start();
+
+                Debug.WriteLine("✓ Game loop iniciado");
+
+                // 12. Cambiar a menú
+                _gameManager.SetGameState(GameState.Menu);
+
+                Debug.WriteLine("╔════════════════════════════════════════╗");
+                Debug.WriteLine("║  ✓ JUEGO LISTO                         ║");
+                Debug.WriteLine("╚════════════════════════════════════════╝\n");
             }
             catch (Exception ex)
             {
+                Debug.WriteLine($"❌ Error: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"Error inicializando juego: {ex.Message}\n\n{ex.StackTrace}",
                     "Error Fatal", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 this.Close();
@@ -157,7 +201,11 @@ namespace EldEngine.GameTest
                     break;
 
                 case Keys.R:
-                    _gameManager.Restart();
+                    if (!_gameManager.IsPlaying)
+                    {
+                        _levelManager.RestartLevel();
+                        _gameManager.Restart();
+                    }
                     e.Handled = true;
                     break;
 
@@ -169,6 +217,7 @@ namespace EldEngine.GameTest
                 case Keys.Space:
                     if (_gameManager.IsMenu)
                     {
+                        _levelManager.LoadLevel(0); // Cargar nivel 1
                         _gameManager.SetGameState(GameState.Playing);
                         e.Handled = true;
                     }
@@ -176,14 +225,17 @@ namespace EldEngine.GameTest
 
                 case Keys.P:
                     // Agregar puntos (para testing)
-                    _gameManager.AddScore(10);
+                    _gameManager.AddScore(50);
                     e.Handled = true;
                     break;
 
                 case Keys.L:
-                    // Siguiente nivel (para testing)
-                    _gameManager.NextLevel();
-                    e.Handled = true;
+                    if (_gameManager.IsPlaying)
+                    {
+                        _levelManager.NextLevel();
+                        _gameManager.SetGameState(GameState.Playing);
+                        e.Handled = true;
+                    }
                     break;
 
                 case Keys.G:
@@ -218,14 +270,15 @@ namespace EldEngine.GameTest
 
         private void UIUpdateTimer_Tick(object? sender, EventArgs e)
         {
-            if (_gameManager == null) return;
+            if (_gameManager == null || _levelManager == null) return;
 
             // Actualizar UI
             var fps = (int)(1f / (_deltaTime > 0 ? _deltaTime : 0.016f));
             var entityCount = _gameService.World.GetEntitiesWith<Transform>().Count();
 
             _statusLabel.Text = $"FPS: {fps} | Entities: {entityCount} | Time: {_gameManager.PlayTime:F1}s";
-            _scoreLabel.Text = $"Score: {_gameManager.CurrentScore} | Level: {_gameManager.CurrentLevel}";
+            _scoreLabel.Text = $"Score: {_gameManager.CurrentScore}";
+            _levelLabel.Text = $"Level: {_levelManager.CurrentLevel}/{_levelManager.TotalLevels}";
 
             // Estado visual
             var stateIcon = _gameManager.CurrentState switch
@@ -337,11 +390,11 @@ namespace EldEngine.GameTest
                 centerX - 150,
                 centerY + 50);
 
-            g.DrawString("Controls: WASD/Arrows to Move | SPACE to Dash | ESC to Pause",
+            g.DrawString("5 Levels | Enemies AI | Collisions",
                 new System.Drawing.Font("Arial", 12f),
                 System.Drawing.Brushes.LightGray,
-                centerX - 350,
-                centerY + 150);
+                centerX - 250,
+                centerY + 130);
         }
 
         private void RenderGameOverOverlay(Graphics g)
@@ -370,7 +423,7 @@ namespace EldEngine.GameTest
                 centerX - 150,
                 centerY + 20);
 
-            g.DrawString($"Level: {_gameManager.CurrentLevel}",
+            g.DrawString($"Level: {_gameManager.CurrentLevel}/{_levelManager.TotalLevels}",
                 scoreFont,
                 System.Drawing.Brushes.Yellow,
                 centerX - 150,
@@ -418,8 +471,8 @@ namespace EldEngine.GameTest
             // Estado del juego
             _stateLabel = new Label
             {
-                Text = "🎮 PLAYING",
-                ForeColor = System.Drawing.Color.Lime,
+                Text = "🎮 MENU",
+                ForeColor = System.Drawing.Color.Cyan,
                 BackColor = System.Drawing.Color.Transparent,
                 AutoSize = true,
                 Location = new System.Drawing.Point(10, 10),
@@ -428,14 +481,27 @@ namespace EldEngine.GameTest
             this.Controls.Add(_stateLabel);
             _stateLabel.BringToFront();
 
-            // Score
-            _scoreLabel = new Label
+            // Nivel actual
+            _levelLabel = new Label
             {
-                Text = "Score: 0",
+                Text = "Level: 0/5",
                 ForeColor = System.Drawing.Color.Yellow,
                 BackColor = System.Drawing.Color.Transparent,
                 AutoSize = true,
                 Location = new System.Drawing.Point(10, 40),
+                Font = new System.Drawing.Font("Consolas", 11f, System.Drawing.FontStyle.Bold)
+            };
+            this.Controls.Add(_levelLabel);
+            _levelLabel.BringToFront();
+
+            // Score
+            _scoreLabel = new Label
+            {
+                Text = "Score: 0",
+                ForeColor = System.Drawing.Color.Lime,
+                BackColor = System.Drawing.Color.Transparent,
+                AutoSize = true,
+                Location = new System.Drawing.Point(10, 70),
                 Font = new System.Drawing.Font("Consolas", 11f, System.Drawing.FontStyle.Bold)
             };
             this.Controls.Add(_scoreLabel);
@@ -448,7 +514,7 @@ namespace EldEngine.GameTest
                 ForeColor = System.Drawing.Color.Cyan,
                 BackColor = System.Drawing.Color.Transparent,
                 AutoSize = true,
-                Location = new System.Drawing.Point(10, 70),
+                Location = new System.Drawing.Point(10, 100),
                 Font = new System.Drawing.Font("Consolas", 9f)
             };
             this.Controls.Add(_statusLabel);
