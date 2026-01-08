@@ -103,7 +103,7 @@ namespace EldEngine.GameTest
                 Debug.WriteLine("✓ Sistema de IA de enemigos registrado");
 
                 // 5. Registrar sistemas mejorados de input y movimiento
-                _gameService.World.AddSystem(new ImprovedPlayerInputSystem(_inputService, _collisionSystem));
+                _gameService.World.AddSystem(new AdvancedPlayerInputSystem(_inputService, _collisionSystem));
                 Debug.WriteLine("✓ Sistema de input mejorado registrado");
 
                 _gameService.World.AddSystem(new SlidingMovementSystem(_collisionSystem));

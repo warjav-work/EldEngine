@@ -3,8 +3,8 @@
 namespace EldEngine.GameTest.Inputs
 {
     /// <summary>
-    /// Mapeo completo entre Windows Forms Keys y nuestro KeyCode enum
-    /// Basado en la tabla oficial de teclas Windows Forms
+    /// Mapeo completo entre Windows Forms Keys y nuestro KeyCode enum.
+    /// Basado en la tabla oficial de teclas Windows Forms.
     /// </summary>
     public static class KeyMapping
     {
@@ -192,7 +192,7 @@ namespace EldEngine.GameTest.Inputs
         }
 
         /// <summary>
-        /// Obtiene el nombre legible de una tecla
+        /// Obtiene el nombre legible de una tecla.
         /// </summary>
         public static string GetKeyName(KeyCode keyCode)
         {
@@ -310,12 +310,12 @@ namespace EldEngine.GameTest.Inputs
         }
 
         /// <summary>
-        /// Obtiene todas las teclas mapeadas
+        /// Obtiene todas las teclas mapeadas.
         /// </summary>
         public static int GetMappedKeyCount() => FormsToKeyCode.Count;
 
         /// <summary>
-        /// Verifica si una tecla está mapeada
+        /// Verifica si una tecla está mapeada.
         /// </summary>
         public static bool IsMapped(System.Windows.Forms.Keys key) => FormsToKeyCode.ContainsKey(key);
     }

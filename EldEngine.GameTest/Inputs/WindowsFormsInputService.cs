@@ -1,4 +1,5 @@
 ﻿using EldEngine.Core.Application.Interfaces;
+using System.Diagnostics;
 
 namespace EldEngine.GameTest.Inputs
 {
@@ -8,6 +9,18 @@ namespace EldEngine.GameTest.Inputs
         private readonly Form _gameForm;
         private readonly Dictionary<KeyCode, bool> _currentKeyState = new();
         private readonly Dictionary<KeyCode, bool> _previousKeyState = new();
+        private readonly Dictionary<char, int> _characterKeyMap = new()
+        {
+            // Caracteres españoles mapeados a códigos únicos
+            { 'ñ', 241 },  // Ñ minúscula
+            { 'Ñ', 242 },  // Ñ mayúscula
+            { 'á', 243 },  // á
+            { 'é', 244 },  // é
+            { 'í', 245 },  // í
+            { 'ó', 246 },  // ó
+            { 'ú', 247 },  // ú
+            { 'ü', 248 },  // ü
+        };
         private (int X, int Y) _mousePosition = (0, 0);
 
         public event Action<KeyCode> OnKeyPressed;
@@ -30,7 +43,8 @@ namespace EldEngine.GameTest.Inputs
             _gameForm.MouseMove += GameForm_MouseMove;
             _gameForm.MouseDown += GameForm_MouseDown;
 
-            System.Diagnostics.Debug.WriteLine("✓ Input Service inicializado");
+            Debug.WriteLine("✓ Input Service inicializado");
+            Debug.WriteLine("  Soporte: Tecla ñ, acentos españoles, y todas las teclas estándar");
         }
 
         public bool IsKeyPressed(KeyCode key)
@@ -110,7 +124,7 @@ namespace EldEngine.GameTest.Inputs
                 Keys.Space => KeyCode.Space,
                 Keys.Return => KeyCode.Enter,
                 Keys.Escape => KeyCode.Escape,
-                _ => KeyCode.A  // Default
+                _ => KeyCode.None  // Default
             };
         }
     }

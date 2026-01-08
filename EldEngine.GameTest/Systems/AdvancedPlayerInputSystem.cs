@@ -6,16 +6,19 @@ using EldEngine.GameTest.Components;
 
 namespace EldEngine.GameTest.Systems
 {
-    /// <summary>Input mejorado que respeta collisiones</summary>
-    public class ImprovedPlayerInputSystem : ISystem
+    /// <summary>
+    /// Procesa input del jugador y actualiza su velocidad.
+    /// Input mejorado que respeta collisiones
+    /// </summary>
+    public class AdvancedPlayerInputSystem : ISystem
     {
         private readonly IInputService _inputService;
         private CollisionSystem _collisionSystem;
 
-        public string Name => nameof(ImprovedPlayerInputSystem);
+        public string Name => nameof(AdvancedPlayerInputSystem);
         public int Priority => 10;
 
-        public ImprovedPlayerInputSystem(IInputService inputService, CollisionSystem collisionSystem)
+        public AdvancedPlayerInputSystem(IInputService inputService, CollisionSystem collisionSystem)
         {
             _inputService = inputService;
             _collisionSystem = collisionSystem;
@@ -33,7 +36,7 @@ namespace EldEngine.GameTest.Systems
                 velocity.X = 0;
                 velocity.Y = 0;
 
-                // Input
+                // Input de Movimiento
                 if (_inputService.IsKeyDown(KeyCode.W) || _inputService.IsKeyDown(KeyCode.Up))
                     velocity.Y = -controller.MoveSpeed;
                 if (_inputService.IsKeyDown(KeyCode.S) || _inputService.IsKeyDown(KeyCode.Down))
@@ -43,7 +46,7 @@ namespace EldEngine.GameTest.Systems
                 if (_inputService.IsKeyDown(KeyCode.D) || _inputService.IsKeyDown(KeyCode.Right))
                     velocity.X = controller.MoveSpeed;
 
-                // Dash
+                // Correr ligeramente
                 if (_inputService.IsKeyPressed(KeyCode.Space))
                 {
                     if (controller.CanDash)
