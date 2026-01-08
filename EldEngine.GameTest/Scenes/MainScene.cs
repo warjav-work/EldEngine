@@ -18,9 +18,9 @@ namespace EldEngine.GameTest.Scenes
             var player = world.CreateEntity();
             world.AddComponent(player, new Transform(10, 10));
             world.AddComponent(player, new Velocity());
-            world.AddComponent(player, new PlayerController(moveSpeed: 5f));
+            world.AddComponent(player, new PlayerController(moveSpeed: 15f));
             world.AddComponent(player, new CombatStats(maxHp: 100, attack: 15, defense: 5));
-            world.AddComponent(player, new Inventory { MaxSlots = 20 });
+            world.AddComponent(player, new InventoryComponent { MaxSlots = 20 });
             //world.AddComponent(player, new GravityComponent(1f));
 
             // Crear aldeano amigable

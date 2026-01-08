@@ -23,9 +23,9 @@ namespace EldEngine.GameTest.Scenes
             var player = world.CreateEntity();
             world.AddComponent(player, new Transform(50, 400));
             world.AddComponent(player, new Velocity());
-            world.AddComponent(player, new PlayerController(5f));
+            world.AddComponent(player, new PlayerController(15f)); // Velocidad de movimiento
             world.AddComponent(player, new CombatStats(100, 15, 5));
-            world.AddComponent(player, new Inventory());
+            world.AddComponent(player, new InventoryComponent());
             world.AddComponent(player, new ColliderComponent(16, 16, true, "player"));
 
             // Crear NPCs amigables (Aldea élfica)
@@ -33,9 +33,9 @@ namespace EldEngine.GameTest.Scenes
             CreateNPC(world, 200, 200, "Elowen", "La Arquera");
 
             // Crear enemigos (Goblins) - Patrulla
-            CreateEnemy(world, 300, 100, "patrol", 20, 8, 2);
-            CreateEnemy(world, 400, 150, "patrol", 20, 8, 2);
-            CreateEnemy(world, 350, 250, "patrol", 20, 8, 2);
+            CreateEnemy(world, 300, 100, "patrol", 20, 30, 6);
+            CreateEnemy(world, 400, 150, "patrol", 20, 8, 6);
+            CreateEnemy(world, 350, 250, "patrol", 20, 8, 6);
 
             // Crear obstáculos (Árboles)
             CreateObstacle(world, 250, 300, "tree");
@@ -67,7 +67,7 @@ namespace EldEngine.GameTest.Scenes
             world.AddComponent(enemy, new Transform(x, y));
             world.AddComponent(enemy, new Velocity());
             world.AddComponent(enemy, new CombatStats(health, attack, 2));
-            world.AddComponent(enemy, new EnemyAIComponent(aiType, 120f, 20f, speed, speed * 1.5f));
+            world.AddComponent(enemy, new EnemyAIComponent(aiType, 150f, 20f, speed, speed * 1.5f));
             world.AddComponent(enemy, new ColliderComponent(14, 14, true, "enemy"));
         }
 

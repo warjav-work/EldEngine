@@ -106,7 +106,7 @@ namespace EldEngine.GameTest
                 _gameService.World.AddSystem(new ImprovedPlayerInputSystem(_inputService, _collisionSystem));
                 Debug.WriteLine("✓ Sistema de input mejorado registrado");
 
-                _gameService.World.AddSystem(new ImprovedMovementSystem(_collisionSystem));
+                _gameService.World.AddSystem(new SlidingMovementSystem(_collisionSystem));
                 Debug.WriteLine("✓ Sistema de movimiento mejorado registrado");
 
                 // 6. Registrar otros sistemas

@@ -17,18 +17,18 @@ namespace EldEngine.GameTest.Systems
 
         public void Execute(World world, float deltaTime)
         {
-            var inventories = world.GetEntitiesWith<Inventory, Transform>();
+            var inventories = world.GetEntitiesWith<InventoryComponent, Transform>();
             // Lógica...
         }
 
         // Método público para que otros sistemas lo usen
         public void AddItemToInventory(World world, Entity entity, InventoryItem item)
         {
-            if (world.HasComponent<Inventory>(entity))
+            if (world.HasComponent<InventoryComponent>(entity))
             {
-                var inv = world.GetComponent<Inventory>(entity);
+                var inv = world.GetComponent<InventoryComponent>(entity);
                 inv.AddItem(item);
-                world.RemoveComponent<Inventory>(entity);
+                world.RemoveComponent<InventoryComponent>(entity);
                 world.AddComponent(entity, inv);
 
                 OnItemPickup?.Invoke(entity, item);

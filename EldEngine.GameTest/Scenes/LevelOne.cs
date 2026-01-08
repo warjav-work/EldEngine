@@ -44,7 +44,7 @@ namespace EldEngine.GameTest.Scenes
             world.AddComponent(player, new Velocity());
             world.AddComponent(player, new PlayerController());
             world.AddComponent(player, new CombatStats(100, 20, 5));
-            world.AddComponent(player, new Inventory());
+            world.AddComponent(player, new InventoryComponent());
         }
 
         private void CreateNpcs(World world)

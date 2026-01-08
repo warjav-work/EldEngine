@@ -9,7 +9,7 @@ namespace EldEngine.GameTest.Components
         public string ItemName { get; set; }
     }
 
-    public class Inventory : IComponent
+    public class InventoryComponent : IComponent
     {
         public List<InventoryItem> Items { get; private set; } = new();
         public int MaxSlots { get; set; } = 20;
@@ -29,6 +29,6 @@ namespace EldEngine.GameTest.Components
         public InventoryItem GetItem(string itemId) =>
             Items.Find(x => x.ItemId == itemId);
 
-        static int IComponent.GetComponentTypeId() => typeof(Inventory).GetHashCode();
+        static int IComponent.GetComponentTypeId() => typeof(InventoryComponent).GetHashCode();
     }
 }

@@ -19,8 +19,8 @@ namespace EldEngine.GameTest.Components
             string aiType = "patrol",
             float detectionRange = 150f,
             float attackRange = 20f,
-            float patrolSpeed = 2f,
-            float chaseSpeed = 4f)
+            float patrolSpeed = 30f,
+            float chaseSpeed = 50f)
         {
             AIType = aiType;
             DetectionRange = detectionRange;
@@ -32,5 +32,7 @@ namespace EldEngine.GameTest.Components
         }
 
         static int IComponent.GetComponentTypeId() => typeof(EnemyAIComponent).GetHashCode();
+        public override string ToString() =>
+            $"EnemyAI({AIType}, Patrol: {PatrolSpeed} px/s, Chase: {ChaseSpeed} px/s)";
     }
 }

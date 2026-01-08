@@ -20,9 +20,9 @@ namespace EldEngine.GameTest.Scenes
             var player = world.CreateEntity();
             world.AddComponent(player, new Transform(50, 400));
             world.AddComponent(player, new Velocity());
-            world.AddComponent(player, new PlayerController(5f));
+            world.AddComponent(player, new PlayerController(15f));
             world.AddComponent(player, new CombatStats(100, 15, 5));
-            world.AddComponent(player, new Inventory());
+            world.AddComponent(player, new InventoryComponent());
             world.AddComponent(player, new ColliderComponent(16, 16, true, "player"));
 
             // NPCs
