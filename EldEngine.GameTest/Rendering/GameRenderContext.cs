@@ -280,7 +280,9 @@ namespace EldEngine.GameTest.Rendering
                 barY - 12);
         }
 
-        /// <summary>Renderiza fondo decorativo</summary>
+        /// <summary>
+        /// Renderiza fondo decorativo.
+        /// </summary>
         private void RenderBackground(Graphics g, System.Drawing.Size screenSize)
         {
             // Patrón de cuadrícula suave

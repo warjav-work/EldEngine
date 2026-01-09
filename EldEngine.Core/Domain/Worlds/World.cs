@@ -126,6 +126,10 @@ namespace EldEngine.Core.Domain.Worlds
             where T1 : IComponent where T2 : IComponent where T3 : IComponent =>
             QueryEntities(typeof(T1), typeof(T2), typeof(T3));
 
+        public IEnumerable<Entity> GetEntitiesWith<T1, T2, T3, T4>()
+        where T1 : IComponent where T2 : IComponent where T3 : IComponent where T4 : IComponent=>
+            QueryEntities(typeof(T1), typeof(T2), typeof(T3), typeof(T4));
+
         /// <summary>
         /// Query genérico para obtener entidades.
         /// </summary>
@@ -207,7 +211,7 @@ namespace EldEngine.Core.Domain.Worlds
         {
             if (!entity.IsValid)
                 throw new ArgumentException("Entity no es válida", nameof(entity));
-        }
+        }       
     }
 
     // ==================== ESTADÍSTICAS DEL MUNDO ====================

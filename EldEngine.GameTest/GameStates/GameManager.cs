@@ -1,9 +1,11 @@
 ﻿using EldEngine.Core.Application.Interfaces;
+using System.Diagnostics;
 
 namespace EldEngine.GameTest.GameStates
 {
     /// <summary>
     /// Gestor global del juego - Maneja estados, pausa, game over, etc.
+    /// Integrado completamente con el DeathSystem para manejar Game Over.
     /// </summary>
     public class GameManager
     {
@@ -28,6 +30,7 @@ namespace EldEngine.GameTest.GameStates
         public int CurrentScore { get; set; } = 0;
         public int CurrentLevel { get; set; } = 1;
         public float PlayTime { get; private set; } = 0f;
+        public string GameOverReason { get; private set; } = "";
 
         public void Initialize(IGameService gameService)
         {
@@ -76,14 +79,37 @@ namespace EldEngine.GameTest.GameStates
             }
         }
 
-        /// <summary>Finaliza el juego con el estado GameOver</summary>
+        /// <summary>
+        /// Finaliza el juego con el estado GameOver.
+        /// </summary>
         public void GameOver(string reason = "")
         {
+            GameOverReason = reason;
             SetGameState(GameState.GameOver);
-            OnGameMessage?.Invoke($"💀 GAME OVER: {reason}");
+
+            // Mostrar razón del game over
+            if (!string.IsNullOrEmpty(reason))
+            {
+                OnGameMessage?.Invoke($"💀 GAME OVER: {reason}");
+            }
+            else
+            {
+                OnGameMessage?.Invoke("💀 GAME OVER");
+            }
+
+            System.Diagnostics.Debug.WriteLine(
+                $"\n╔════════════════════════════════════╗\n" +
+                $"║  💀 GAME OVER 💀                   ║\n" +
+                $"║  Razón: {reason,-26} ║\n" +
+                $"║  Score: {CurrentScore,-26} ║\n" +
+                $"║  Level: {CurrentLevel,-26} ║\n" +
+                $"║  Tiempo: {PlayTime:F1}s{new string(' ', 20)} ║\n" +
+                $"╚════════════════════════════════════╝\n");
         }
 
-        /// <summary>Reinicia el juego</summary>
+        /// <summary>
+        /// Reinicia el juego.
+        /// </summary>
         public void Restart()
         {
             Reset();
@@ -91,7 +117,19 @@ namespace EldEngine.GameTest.GameStates
             OnGameMessage?.Invoke("🔄 JUEGO REINICIADO");
         }
 
-        /// <summary>Actualiza el tiempo de juego (llamar cada frame)</summary>
+        /// <summary>
+        /// Vuelve al menú principal.
+        /// </summary>
+        public void GoToMenu()
+        {
+            Reset();
+            SetGameState(GameState.Menu);
+            OnGameMessage?.Invoke("📋 VOLVIENDO AL MENÚ");
+        }
+
+        /// <summary>
+        /// Actualiza el tiempo de juego (llamar cada frame desde GameWindow).
+        /// </summary>
         public void Update(float deltaTime)
         {
             if (_currentState == GameState.Playing)
@@ -103,26 +141,41 @@ namespace EldEngine.GameTest.GameStates
         /// <summary>Suma puntos al score</summary>
         public void AddScore(int points)
         {
-            if (_currentState == GameState.Playing)
+            if (_currentState == GameState.Playing && points > 0)
             {
                 CurrentScore += points;
                 OnGameMessage?.Invoke($"⭐ +{points} puntos! Total: {CurrentScore}");
+
+                Debug.WriteLine($"[SCORE] +{points} | Total: {CurrentScore}");
             }
         }
 
         /// <summary>Avanza al siguiente nivel</summary>
         public void NextLevel()
         {
-            CurrentLevel++;
-            CurrentScore += 100 * CurrentLevel; // Bonus por nivel
-            OnGameMessage?.Invoke($"🎉 ¡NIVEL {CurrentLevel} DESBLOQUEADO!");
+            if (_currentState == GameState.Playing)
+            {
+                CurrentLevel++;
+                int bonusPoints = 100 * CurrentLevel;
+                CurrentScore += bonusPoints;
+
+                OnGameMessage?.Invoke(
+                    $"🎉 ¡NIVEL {CurrentLevel} DESBLOQUEADO! +{bonusPoints} puntos bonus");
+
+                Debug.WriteLine($"[LEVEL UP] Level {CurrentLevel} | Bonus: {bonusPoints}");
+            }
         }
 
-        /// <summary>Guarda datos persisten del juego</summary>
+        /// <summary>
+        /// Guarda datos persisten del juego.
+        /// </summary>
         public void SaveData(string key, object value)
         {
+            if (string.IsNullOrEmpty(key))
+                throw new ArgumentNullException(nameof(key));
+
             _gameData[key] = value;
-            System.Diagnostics.Debug.WriteLine($"💾 Guardado: {key} = {value}");
+            Debug.WriteLine($"💾 Guardado: {key} = {value}");
         }
 
         /// <summary>
@@ -136,6 +189,20 @@ namespace EldEngine.GameTest.GameStates
         }
 
         /// <summary>
+        /// Intenta obtener datos sin lanzar excepción.
+        /// </summary>
+        public bool TryGetData<T>(string key, out T value)
+        {
+            if (_gameData.TryGetValue(key, out var obj) && obj is T typedValue)
+            {
+                value = typedValue;
+                return true;
+            }
+            value = default;
+            return false;
+        }
+
+        /// <summary>
         /// Reinicia todos los datos y estado.
         /// </summary>
         public void Reset()
@@ -146,7 +213,8 @@ namespace EldEngine.GameTest.GameStates
             CurrentScore = 0;
             CurrentLevel = 1;
             PlayTime = 0f;
-            System.Diagnostics.Debug.WriteLine("🔄 GameManager reseteado");
+            GameOverReason = "";
+            Debug.WriteLine("🔄 GameManager reseteado");
         }
 
         // ==================== LÓGICA PRIVADA ====================

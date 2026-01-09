@@ -1,6 +1,8 @@
 ﻿namespace EldEngine.GameTest.GameStates
 {
-    /// <summary>Estados posibles del juego</summary>
+    /// <summary>
+    /// Estados posibles del juego.
+    /// </summary>
     public enum GameState
     {
         Menu,
