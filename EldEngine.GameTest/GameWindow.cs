@@ -42,6 +42,12 @@ namespace EldEngine.GameTest
         private Label _stateLabel;
         private Label _messageLabel;
         private Timer _messageTimer;
+
+        private Timer _gameLoopTimer;
+        private Timer _uiUpdateTimer;
+
+        // Flag para evitar recursión
+        private bool _isClosing = false;
         public GameWindow()
         {
             InitializeComponent();
@@ -56,10 +62,57 @@ namespace EldEngine.GameTest
 
         protected override void OnClosed(EventArgs e)
         {
+            // Solo ejecutar una vez
+            if (_isClosing)
+            {
+                base.OnClosed(e);
+                return;
+            }
+
+            _isClosing = true;
+
+            Debug.WriteLine("\n╔════════════════════════════════════════════════════════╗");
+            Debug.WriteLine("║  CERRANDO APLICACIÓN                                   ║");
+            Debug.WriteLine("║  Limpiando recursos...                                 ║");
+            Debug.WriteLine("╚════════════════════════════════════════════════════════╝\n");
+
+            try
+            {
+                // Guardar datos si es necesario
+                if (_gameManager != null)
+                {
+                    _gameManager.SaveData("LastExitTime", DateTime.Now);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"⚠️ Error guardando datos: {ex.Message}");
+            }
+
+            try
+            {
+                // Detener todos los timers
+                _messageTimer?.Stop();
+                _gameLoopTimer?.Stop();
+                _uiUpdateTimer?.Stop();
+
+                // Detener stopwatch
+                _gameTimer?.Stop();
+
+                // Limpiar servicios
+                _gameService?.Dispose();
+
+                // Limpiar UI
+                this.Controls.Clear();
+
+                Debug.WriteLine("✓ Recursos liberados correctamente\n");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"⚠️ Error durante limpieza: {ex.Message}");
+            }
+
             base.OnClosed(e);
-            _gameService?.Dispose();
-            _gameTimer?.Stop();
-            _messageTimer?.Stop();
         }
 
         /// <summary>
@@ -89,7 +142,7 @@ namespace EldEngine.GameTest
 
                 // 2. Inicializar motor ECS
                 _gameService.Initialize();
-                Debug.WriteLine("✓ Motor ECS inicializado");        
+                Debug.WriteLine("✓ Motor ECS inicializado");
 
 
                 // 3. Crear sistemas de colisión
@@ -122,13 +175,7 @@ namespace EldEngine.GameTest
                 // Suscribirse a eventos
                 _gameManager.OnGameStateChanged += OnGameStateChanged;
                 _gameManager.OnGameMessage += OnGameMessage;
-                Debug.WriteLine("✓ GameManager inicializado");
-
-                // Registrar escenas
-                _sceneService.RegisterScene("Main", new MainScene());
-                _sceneService.RegisterScene("Combat", new CombatScene());
-
-
+                Debug.WriteLine("✓ GameManager inicializado");                
 
                 // 8. Crear LevelManager
                 _levelManager = new LevelManager();
@@ -150,10 +197,10 @@ namespace EldEngine.GameTest
                 this.KeyDown += GameWindow_KeyDown;
 
                 // Timer para actualizar UI (30 FPS)
-                _messageTimer = new Timer();
-                _messageTimer.Interval = 33;
-                _messageTimer.Tick += UIUpdateTimer_Tick;
-                _messageTimer.Start();
+                _uiUpdateTimer = new Timer();
+                _uiUpdateTimer.Interval = 33;
+                _uiUpdateTimer.Tick += UIUpdateTimer_Tick;
+                _uiUpdateTimer.Start();
 
                 // Forzar render continuo
                 this.SetStyle(ControlStyles.AllPaintingInWmPaint |
@@ -173,6 +220,8 @@ namespace EldEngine.GameTest
 
                 Debug.WriteLine("╔════════════════════════════════════════╗");
                 Debug.WriteLine("║  ✓ JUEGO LISTO                         ║");
+                Debug.WriteLine("║  Presiona ESC o CTRL+Q en menú para    ║");
+                Debug.WriteLine("║  salir del juego                       ║");
                 Debug.WriteLine("╚════════════════════════════════════════╝\n");
             }
             catch (Exception ex)
@@ -186,22 +235,66 @@ namespace EldEngine.GameTest
 
         private void GameWindow_KeyDown(object? sender, KeyEventArgs e)
         {
+            // ==================== MENÚ PRINCIPAL ====================
+            if (_gameManager.IsMenu)
+            {
+                // ESC para cerrar desde menú
+                if (e.KeyCode == Keys.Escape)
+                {
+                    Debug.WriteLine("╔════════════════════════════════════╗");
+                    Debug.WriteLine("║  CERRANDO JUEGO DESDE MENÚ         ║");
+                    Debug.WriteLine("║  ¡Hasta luego, aventurero! 👋      ║");
+                    Debug.WriteLine("╚════════════════════════════════════╝");
+
+                    e.Handled = true;
+                    this.Close();  // Cierra la aplicación
+                    return;
+                }
+
+                // CTRL+Q para cerrar desde menú
+                if (e.KeyCode == Keys.Q && e.Control)
+                {
+                    Debug.WriteLine("╔════════════════════════════════════╗");
+                    Debug.WriteLine("║  CERRANDO JUEGO (CTRL+Q)          ║");
+                    Debug.WriteLine("║  ¡Hasta luego, aventurero! 👋      ║");
+                    Debug.WriteLine("╚════════════════════════════════════╝");
+
+                    e.Handled = true;
+                    this.Close();  // Cierra la aplicación
+                    return;
+                }
+
+                // SPACE para comenzar
+                if (e.KeyCode == Keys.Space)
+                {
+                    _levelManager.LoadLevel(0);
+                    _gameManager.SetGameState(GameState.Playing);
+                    e.Handled = true;
+                    return;
+                }
+
+                return;  // IMPORTANTE: No procesar más teclas en menú
+            }
+
+            // ==================== DURANTE EL JUEGO ====================
+            if (e.KeyCode == Keys.Escape)
+            {
+                if (_gameManager.IsPlaying)
+                {
+                    _gameManager.TogglePause();
+                }
+                else if (_gameManager.IsPaused)
+                {
+                    _gameManager.SetGameState(GameState.Playing);
+                }
+                e.Handled = true;
+                return;
+            }
+
             switch (e.KeyCode)
             {
-                case Keys.Escape:
-                    if (_gameManager.IsPlaying)
-                    {
-                        _gameManager.TogglePause();
-                    }
-                    else if (_gameManager.IsPaused)
-                    {
-                        _gameManager.SetGameState(GameState.Playing);
-                    }
-                    e.Handled = true;
-                    break;
-
                 case Keys.R:
-                    if (!_gameManager.IsPlaying)
+                    if (!_gameManager.IsPlaying && !_gameManager.IsMenu)
                     {
                         _levelManager.RestartLevel();
                         _gameManager.Restart();
@@ -213,16 +306,7 @@ namespace EldEngine.GameTest
                 case Keys.M:
                     _gameManager.SetGameState(GameState.Menu);
                     e.Handled = true;
-                    break;
-
-                case Keys.Space:
-                    if (_gameManager.IsMenu)
-                    {
-                        _levelManager.LoadLevel(0); // Cargar nivel 1
-                        _gameManager.SetGameState(GameState.Playing);
-                        e.Handled = true;
-                    }
-                    break;
+                    break;                
 
                 case Keys.P:
                     // Agregar puntos (para testing)
@@ -377,25 +461,39 @@ namespace EldEngine.GameTest
 
             // Subtitle
             var subtitleFont = new System.Drawing.Font("Arial", 18f);
-            g.DrawString("Chronicles of the Silver Grove",
-                subtitleFont,
+            var subtitleText = "Chronicles of the Silver Grove";
+            var subtitleSize = g.MeasureString(subtitleText, subtitleFont);
+            g.DrawString(subtitleText, subtitleFont, 
                 System.Drawing.Brushes.LimeGreen,
-                centerX - 200,
+                centerX - subtitleSize.Width / 2,
                 centerY - 80);
 
             // Menu options
             var menuFont = new System.Drawing.Font("Arial", 16f);
-            g.DrawString("Press SPACE to Start",
+            var menuTesxt = "Press SPACE to Start";
+            var menuSize = g.MeasureString(menuTesxt, menuFont);
+            g.DrawString(menuTesxt,
                 menuFont,
                 System.Drawing.Brushes.White,
-                centerX - 150,
+                centerX - menuSize.Width / 2,
                 centerY + 50);
 
-            g.DrawString("5 Levels | Enemies AI | Collisions",
-                new System.Drawing.Font("Arial", 12f),
-                System.Drawing.Brushes.LightGray,
-                centerX - 250,
+            // Mostrar opción de salir
+            var smallFont = new System.Drawing.Font("Arial", 12f);
+            var smallText = "WASD Movement | E/Q/R Actions | ESC or CTRL+Q to Exit";
+            var smallSize = g.MeasureString(smallText, smallFont);
+            g.DrawString(smallText,
+                smallFont, System.Drawing.Brushes.LightGray,
+                centerX - smallSize.Width / 2, 
                 centerY + 130);
+            // Descripción del juego
+            var descFont = new System.Drawing.Font("Arial", 12f, FontStyle.Italic);
+            var descText = "5 Levels | Enemies AI | Collisions";
+            var descSize = g.MeasureString(descText, descFont);
+            g.DrawString(descText, descFont,
+                System.Drawing.Brushes.LightGray,
+                centerX - descSize.Width / 2,
+                centerY + 160);
         }
 
         private void RenderGameOverOverlay(Graphics g)
@@ -418,24 +516,32 @@ namespace EldEngine.GameTest
 
             // Score
             var scoreFont = new System.Drawing.Font("Arial", 20f);
-            g.DrawString($"Final Score: {_gameManager.CurrentScore}",
+            var scoreText = $"Final Score: {_gameManager.CurrentScore}";
+            var scoreSize = g.MeasureString(scoreText, scoreFont);
+            g.DrawString(scoreText,
                 scoreFont,
                 System.Drawing.Brushes.Yellow,
-                centerX - 150,
+                centerX - scoreSize.Width / 2,
                 centerY + 20);
 
-            g.DrawString($"Level: {_gameManager.CurrentLevel}/{_levelManager.TotalLevels}",
-                scoreFont,
+            // Level reached
+            var levelFont = new System.Drawing.Font("Arial", 20f);
+            var levelText = $"Level Reached: {_levelManager.CurrentLevel}/{_levelManager.TotalLevels}";
+            var levelSize = g.MeasureString(levelText, levelFont);
+            g.DrawString(levelText,
+                levelFont,
                 System.Drawing.Brushes.Yellow,
-                centerX - 150,
+                centerX - levelSize.Width / 2,
                 centerY + 60);
 
             // Instructions
             var infoFont = new System.Drawing.Font("Arial", 14f);
-            g.DrawString("Press R to Restart | M for Menu",
+            var infoText = "Press R to Restart | M for Menu";
+            var infoSize = g.MeasureString(infoText, infoFont);
+            g.DrawString(infoText,
                 infoFont,
                 System.Drawing.Brushes.White,
-                centerX - 200,
+                centerX - infoSize.Width / 2,
                 centerY + 130);
         }
 
@@ -460,10 +566,12 @@ namespace EldEngine.GameTest
 
             // Instrucciones
             var infoFont = new System.Drawing.Font("Arial", 14f);
-            g.DrawString("Press ESC to Resume | R to Restart | M for Menu",
+            var infoText = "Press ESC to Resume | R to Restart | M for Menu";
+            var infoSize = g.MeasureString(infoText, infoFont);
+            g.DrawString(infoText,
                 infoFont,
                 System.Drawing.Brushes.White,
-                centerX - 250,
+                centerX - infoSize.Width / 2,
                 centerY + 50);
         }
 
@@ -536,6 +644,6 @@ namespace EldEngine.GameTest
             };
             this.Controls.Add(_messageLabel);
             _messageLabel.BringToFront();
-        }
+        }        
     }
 }
