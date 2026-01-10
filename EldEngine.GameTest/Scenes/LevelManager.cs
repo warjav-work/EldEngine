@@ -1,6 +1,9 @@
 ﻿using EldEngine.Core.Application.Interfaces;
 using EldEngine.Core.Domain.Values;
 using EldEngine.Core.Domain.Worlds;
+using EldEngine.Core.Infrastructure.Events;
+using EldEngine.GameTest.Components;
+using EldEngine.GameTest.Events;
 using EldEngine.GameTest.GameStates;
 using System;
 using System.Collections.Generic;
@@ -14,6 +17,8 @@ namespace EldEngine.GameTest.Scenes
         private IGameService _gameService;
         private ISceneService _sceneService;
         private GameManager _gameManager;
+
+        private EventBus _eventBus;
 
         private int _currentLevelIndex = 0;
         private List<string> _levelSequence = new();
@@ -31,6 +36,8 @@ namespace EldEngine.GameTest.Scenes
             _gameService = gameService;
             _sceneService = sceneService;
             _gameManager = gameManager;
+
+            _eventBus = new EventBus();
 
             // Registrar todas las escenas
             RegisterLevels();
@@ -132,6 +139,56 @@ namespace EldEngine.GameTest.Scenes
         public void RestartLevel()
         {
             LoadLevel(_currentLevelIndex);
+        }
+
+        public void CheckLevelCompletion()
+        {
+            // Verificar si todos los enemigos están derrotados
+            var remainingEnemies = _gameService.World
+                .GetEntitiesWith<EnemyAIComponent>()
+                .Count();
+
+            if (remainingEnemies == 0)
+            {
+                // ✅ Nivel completado
+                var evt = new LevelCompletedEvent(
+                    levelNumber: _currentLevelIndex + 1,
+                    levelName: "Bosque Élfico",
+                    score: _gameManager.CurrentScore,
+                    timeSpent: _gameManager.PlayTime,
+                    enemiesDefeated: 10,
+                    itemsCollected: 5,
+                    starRating: CalculateStarRating(),
+                    speedBonus: CalculateSpeedBonus(),
+                    isLastLevel: _currentLevelIndex >= _levelSequence.Count - 1
+                );
+
+                _eventBus.Publish(evt);
+            }
+        }
+
+        private int CalculateStarRating()
+        {
+            // Lógica para calcular estrellas
+            // 5 estrellas si: < 60s, sin daño
+            // 4 estrellas si: < 90s, poco daño
+            // etc.
+            if (_gameManager.PlayTime < 60)
+                return 5;
+            else if (_gameManager.PlayTime < 90)
+                return 4;
+            else if (_gameManager.PlayTime < 120)
+                return 3;
+            else
+                return 2;
+        }
+
+        private int CalculateSpeedBonus()
+        {
+            // Bonus: 1 punto por segundo ahorrado (máximo 100)
+            if (_gameManager.PlayTime < 60)
+                return 100;
+            return Math.Max(0, (int)(120 - _gameManager.PlayTime));
         }
 
         public bool IsLastLevel => _currentLevelIndex == _levelSequence.Count - 1;

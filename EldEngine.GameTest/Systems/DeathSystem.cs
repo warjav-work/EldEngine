@@ -2,7 +2,10 @@
 using EldEngine.Core.Domain.Systems;
 using EldEngine.Core.Domain.Values;
 using EldEngine.Core.Domain.Worlds;
+using EldEngine.Core.Infrastructure.Caching;
+using EldEngine.Core.Infrastructure.Events;
 using EldEngine.GameTest.Components;
+using EldEngine.GameTest.Events;
 using EldEngine.GameTest.GameStates;
 using System;
 using System.Collections.Generic;
@@ -18,7 +21,8 @@ namespace EldEngine.GameTest.Systems
     /// </summary>
     public class DeathSystem : ISystem
     {
-        private GameManager _gameManager;
+        private readonly EventBus _eventBus;
+        private readonly SystemQueryCache _cache;
         private List<Entity> _deadEntities = new();
 
         public string Name => nameof(DeathSystem);
@@ -26,16 +30,20 @@ namespace EldEngine.GameTest.Systems
 
         public event Action<Entity> OnEntityDeath;
 
-        public DeathSystem(GameManager gameManager)
+        /// <summary>
+        /// Crea un DeathSystem desacoplado.
+        /// </summary>
+        public DeathSystem(EventBus eventBus)
         {
-            _gameManager = gameManager ?? throw new ArgumentNullException(nameof(gameManager));
+            _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+            _cache = new SystemQueryCache();
         }
 
         public void Execute(World world, float deltaTime)
         {
             _deadEntities.Clear();
 
-            // Obtener todas las entidades con CombatStats
+            // Obtener todas las entidades con CombatStats (usar caché)
             var entities = world.GetEntitiesWith<CombatStats>().ToList();
 
             foreach (var entity in entities)
@@ -51,11 +59,11 @@ namespace EldEngine.GameTest.Systems
                 }
             }
 
-            // Procesar muertes
+            // Procesar muertes (después de iterar sobre colecciones)
             foreach (var entity in _deadEntities)
             {
                 HandleDeath(world, entity);
-            }
+            }        
         }
 
         /// <summary>
@@ -80,6 +88,8 @@ namespace EldEngine.GameTest.Systems
             OnEntityDeath?.Invoke(entity);
 
             // Opcionalmente: Destruir la entidad inmediatamente
+            // Marcar para destrucción
+            // (Se destruye después de que todos los sistemas terminen)
             // world.DestroyEntity(entity);
         }
 
@@ -95,8 +105,13 @@ namespace EldEngine.GameTest.Systems
             Debug.WriteLine($"║  Vida: {stats.CurrentHealth}/{stats.MaxHealth}                       ║");
             Debug.WriteLine("╚════════════════════════════════════╝\n");
 
-            // Cambiar estado a Game Over
-            _gameManager.GameOver("El jugador fue derrotado en combate");
+            // ✅ NUEVO: Publicar evento en lugar de llamar GameManager
+            _eventBus.Publish(new PlayerDiedEvent
+            {
+                Player = player,
+                Reason = "El jugador fue derrotado en combate"
+            });
+
         }
 
         /// <summary>
@@ -104,25 +119,39 @@ namespace EldEngine.GameTest.Systems
         /// </summary>
         private void HandleEnemyDeath(World world, Entity enemy)
         {
-            var stats = world.GetComponent<CombatStats>(enemy);
-            var aiComponent = world.GetComponent<EnemyAIComponent>(enemy);
+            var stats = world.GetComponent<CombatStats>(enemy);            
+            var transform = world.GetComponent<Transform>(enemy);
 
-            // Puntos base por matar enemigo
-            int pointsReward = 50;
+            // Calcular puntos
+            int basePoints = 50;
+            int healthBonus = stats.MaxHealth * 2;
+            int totalPoints = basePoints + healthBonus;
 
-            // Bonus por dificultad (vida * 5 puntos)
-            pointsReward += stats.MaxHealth * 2;
+            // Obtener tipo de enemigo
+            string enemyType = "unknown";
+            if (world.HasComponent<EnemyAIComponent>(enemy))
+            {
+                var ai = world.GetComponent<EnemyAIComponent>(enemy);
+                enemyType = ai.AIType;
+            }
 
-            // Sumar puntos
-            _gameManager.AddScore(pointsReward);
+            // Crear evento con información completa
+            var enemyDefeatedEvent = new EnemyDefeatedEvent(
+                enemy: enemy,
+                pointsRewarded: totalPoints,
+                enemyType: enemyType,
+                maxHealth: stats.MaxHealth,
+                attack: stats.Attack,
+                defeatPosition: (transform.X, transform.Y),
+                wasOneShot: false  // O calcular si fue one-shot
+            );
 
-            Debug.WriteLine($"[DEATH] ☠️ Enemigo derrotado | +{pointsReward} puntos | " +
-                $"ID: {enemy.Id}");
+            // ✅ Publicar evento
+            _eventBus.Publish(enemyDefeatedEvent);
 
-            // Mostrar mensaje flotante (si tienes sistema de mensajes)
-            // TODO: _gameManager.OnGameMessage?.Invoke($"⭐ +{pointsReward} puntos!");
+            Debug.WriteLine($"[DEATH] ☠️ Enemigo derrotado: {enemyDefeatedEvent}");
 
-            // Destruir la entidad del enemigo
+            // Destruir la entidad
             world.DestroyEntity(enemy);
         }
 

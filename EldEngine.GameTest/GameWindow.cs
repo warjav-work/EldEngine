@@ -2,6 +2,9 @@
 using EldEngine.Core.Application.Services;
 using EldEngine.Core.Domain.Systems;
 using EldEngine.Core.Domain.Values;
+using EldEngine.Core.Infrastructure.Events;
+using EldEngine.Core.Infrastructure.Systems;
+using EldEngine.GameTest.Events;
 using EldEngine.GameTest.GameStates;
 using EldEngine.GameTest.Inputs;
 using EldEngine.GameTest.Rendering;
@@ -22,13 +25,19 @@ namespace EldEngine.GameTest
         private ISceneService _sceneService;
         private IInputService _inputService;
 
+        // ==================== INFRAESTRUCTURA ====================
+        private EventBus _eventBus;
+        private SystemRegistry _systemRegistry;
+
         // ==================== MANAGERS ====================
         private GameManager _gameManager;
         private LevelManager _levelManager;
 
         // ==================== SISTEMAS ====================
         private CollisionSystem _collisionSystem;
+        private UnifiedMovementSystem _movementSystem;
         private EnemyAISystem _enemyAISystem;
+        private DeathSystem _deathSystem;
 
         // ==================== RENDERING ====================
         private GameRenderContext _renderContext;
@@ -137,14 +146,37 @@ namespace EldEngine.GameTest
                 _sceneService = new SceneService();
                 _inputService = new WindowsFormsInputService(this);
                 _gameService = new GameService(_sceneService, _inputService);
-
                 Debug.WriteLine("✓ Servicios creados");
 
                 // 2. Inicializar motor ECS
                 _gameService.Initialize();
                 Debug.WriteLine("✓ Motor ECS inicializado");
 
+                // ==================== 2. CREAR EVENT BUS ====================
+                // ✅ Ahora los sistemas se comunican sin acoplamiento
+                _eventBus = new EventBus();
+                Debug.WriteLine("✓ EventBus creado");
 
+                // ==================== 3. CREAR SYSTEM REGISTRY ====================
+                // ✅ Registro centralizado y desacoplado de sistemas
+                _systemRegistry = new SystemRegistry(_gameService.World);
+                RegisterSystems();
+                _systemRegistry.Initialize();
+                Debug.WriteLine("✓ Sistemas registrados e inicializados");
+
+                // 4. Crear GameManager
+                _gameManager = new GameManager();
+                _gameManager.Initialize(_gameService);
+
+                // Suscribirse a eventos
+                _gameManager.OnGameStateChanged += OnGameStateChanged;
+                _gameManager.OnGameMessage += OnGameMessage;
+                Debug.WriteLine("✓ GameManager inicializado");
+
+                // ==================== 5. CONECTAR EVENT BUS A GAME MANAGER ====================
+                // ✅ DeathSystem publica eventos, GameManager los escucha
+                SubscribeGameManagerToEvents();
+                /*
                 // 3. Crear sistemas de colisión
                 _collisionSystem = new CollisionSystem();
                 _gameService.World.AddSystem(_collisionSystem);
@@ -166,17 +198,8 @@ namespace EldEngine.GameTest
                 _gameService.World.AddSystem(new NpcInteractionSystem());
                 _gameService.World.AddSystem(new CombatSystem());
                 Debug.WriteLine("✓ Sistemas adicionales registrados");
-                //_gameService.World.AddSystem(new GravitySystem());
-
-                // 7. Crear GameManager
-                _gameManager = new GameManager();
-                _gameManager.Initialize(_gameService);
-
-                // Suscribirse a eventos
-                _gameManager.OnGameStateChanged += OnGameStateChanged;
-                _gameManager.OnGameMessage += OnGameMessage;
-                Debug.WriteLine("✓ GameManager inicializado");                
-
+                //_gameService.World.AddSystem(new GravitySystem());                              
+                */
                 // 8. Crear LevelManager
                 _levelManager = new LevelManager();
                 _levelManager.Initialize(_gameService, _sceneService, _gameManager);
@@ -233,13 +256,103 @@ namespace EldEngine.GameTest
             }
         }
 
+        /// <summary>
+        /// Registra todos los sistemas en el SystemRegistry.
+        /// ✅ Sin acoplamiento con GameWindow
+        /// </summary>
+        private void RegisterSystems()
+        {
+            // Colisiones (Prioridad 28)
+            _systemRegistry.Register(() =>
+            {
+                _collisionSystem = new CollisionSystem();
+                return _collisionSystem;
+            }, priority: 28);
+
+            // Movimiento unificado (Prioridad 22)
+            // ✅ Un sistema para todos los modos de colisión
+            _systemRegistry.Register(() =>
+            {
+                _movementSystem = new UnifiedMovementSystem(_collisionSystem,
+                    UnifiedMovementSystem.CollisionMode.Sliding);
+                return _movementSystem;
+            }, priority: 22);
+
+            // Input del jugador (Prioridad 10)
+            _systemRegistry.Register(() =>
+                new AdvancedPlayerInputSystem(_inputService, _collisionSystem), priority: 10);
+
+            // IA de enemigos (Prioridad 45)
+            _systemRegistry.Register(() =>
+            {
+                _enemyAISystem = new EnemyAISystem(_collisionSystem);
+                return _enemyAISystem;
+            }, priority: 45);
+
+            // Contacto por daño (Prioridad 35)
+            _systemRegistry.Register(() =>
+                new ContactDamageSystem(), priority: 35);
+
+            // NPC Interaction (Prioridad 80)
+            _systemRegistry.Register(() =>
+                new NpcInteractionSystem(), priority: 80);
+
+            // Combat (Prioridad 100)
+            _systemRegistry.Register(() =>
+                new CombatSystem(), priority: 100);
+
+            // Muerte - ✅ Desacoplado de GameManager, usa EventBus
+            _systemRegistry.Register(() =>
+            {
+                _deathSystem = new DeathSystem(_eventBus);
+                return _deathSystem;
+            }, priority: 110);
+
+            Debug.WriteLine("\n[SystemRegistry] Registrando sistemas...");
+        }
+
+        /// <summary>
+        /// Suscribe GameManager a eventos del EventBus.
+        /// ✅ Desacoplamiento total: DeathSystem no conoce GameManager
+        /// </summary>
+        private void SubscribeGameManagerToEvents()
+        {
+            // Cuando un jugador muere, cambiar a GameOver
+            _eventBus.Subscribe<PlayerDiedEvent>(evt =>
+            {
+                Debug.WriteLine($"[EVENT] PlayerDiedEvent recibido: {evt.Reason}");
+                _gameManager.GameOver(evt.Reason);
+            });
+
+            // Cuando se derrota un enemigo, sumar puntos
+            _eventBus.Subscribe<EnemyDefeatedEvent>(evt =>
+            {
+                Debug.WriteLine($"[EVENT] EnemyDefeatedEvent: +{evt.PointsRewarded} pts");
+
+                // ✅ Sumar puntos
+                _gameManager.AddScore(evt.PointsRewarded);
+
+                // ✅ Mostrar mensaje (Sin error)
+               // _gameManager.OnGameMessage?.Invoke($"⭐ +{evt.PointsRewarded} puntos!");
+            });
+                    
+            // Cuando se completa un nivel
+            _eventBus.Subscribe<LevelCompletedEvent>(evt =>
+            {
+                Debug.WriteLine($"[EVENT] LevelCompletedEvent: Nivel {evt.LevelNumber}");
+                _gameManager.NextLevel();
+            });
+
+            Debug.WriteLine("[EventBus] ✓ GameManager suscrito a eventos");
+        }
+
         private void GameWindow_KeyDown(object? sender, KeyEventArgs e)
         {
             // ==================== MENÚ PRINCIPAL ====================
             if (_gameManager.IsMenu)
             {
                 // ESC para cerrar desde menú
-                if (e.KeyCode == Keys.Escape)
+                if (e.KeyCode == Keys.Escape || (e.KeyCode == Keys.Q && e.Control))
                 {
                     Debug.WriteLine("╔════════════════════════════════════╗");
                     Debug.WriteLine("║  CERRANDO JUEGO DESDE MENÚ         ║");
@@ -249,20 +362,7 @@ namespace EldEngine.GameTest
                     e.Handled = true;
                     this.Close();  // Cierra la aplicación
                     return;
-                }
-
-                // CTRL+Q para cerrar desde menú
-                if (e.KeyCode == Keys.Q && e.Control)
-                {
-                    Debug.WriteLine("╔════════════════════════════════════╗");
-                    Debug.WriteLine("║  CERRANDO JUEGO (CTRL+Q)          ║");
-                    Debug.WriteLine("║  ¡Hasta luego, aventurero! 👋      ║");
-                    Debug.WriteLine("╚════════════════════════════════════╝");
-
-                    e.Handled = true;
-                    this.Close();  // Cierra la aplicación
-                    return;
-                }
+                }                
 
                 // SPACE para comenzar
                 if (e.KeyCode == Keys.Space)
@@ -350,7 +450,13 @@ namespace EldEngine.GameTest
 
         private void OnGameStateChanged(GameState newState)
         {
-            System.Diagnostics.Debug.WriteLine($"Estado cambió a: {newState}");
+            Debug.WriteLine($"Estado cambió a: {newState}");
+            // Publicar evento en EventBus
+            _eventBus.Publish(new GameStateChangedEvent
+            {
+                PreviousState = _gameManager.PreviousState.ToString(),
+                NewState = newState.ToString()
+            });
         }
 
         private void UIUpdateTimer_Tick(object? sender, EventArgs e)
@@ -408,6 +514,9 @@ namespace EldEngine.GameTest
                 {
                     _gameService.Update(_deltaTime);
                 }
+
+                // ✅ NUEVO: Procesar eventos después de actualizar
+                _eventBus.ProcessEvents();
 
                 // Renderizar siempre
                 _renderContext.Render(e.Graphics, _gameService.World, this.ClientSize);
