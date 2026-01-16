@@ -1,12 +1,13 @@
 ﻿using EldEngine.Core.Domain.Entities;
 using EldEngine.Core.Domain.Values;
 using EldEngine.Core.Domain.Worlds;
+using EldEngine.Core.Infrastructure.Rendering;
 using EldEngine.GameTest.Components;
 
 namespace EldEngine.GameTest.Rendering
 {
     /// <summary>Contexto de rendering usando GDI+ de Windows Forms</summary>
-    public class GameRenderContext
+    public class GameRenderContext : RenderContext
     {
         private readonly Form _form;
         private readonly Dictionary<string, Bitmap> _spriteCache = new();

@@ -15,6 +15,7 @@ namespace EldEngine.Core.Application.Services
         private readonly IInputService _inputService;
         private readonly SceneSerializer _serializer;
         private bool _initialized = false;
+        private SpriteAssetManager assetManager;
 
         public World World => _world;
 
@@ -76,6 +77,13 @@ namespace EldEngine.Core.Application.Services
                 OnError?.Invoke($"Error guardando escena: {ex.Message}");
             }
         }
+
+        public void SetAssetManager(SpriteAssetManager manager)
+        {
+            assetManager = manager;
+        }
+
+        public SpriteAssetManager AssetManager => assetManager;
 
         private void RegisterDefaultSystems()
         {

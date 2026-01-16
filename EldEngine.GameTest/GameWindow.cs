@@ -1,5 +1,6 @@
 ﻿using EldEngine.Core.Application.Interfaces;
 using EldEngine.Core.Application.Services;
+using EldEngine.Core.Application.Systems;
 using EldEngine.Core.Domain.Systems;
 using EldEngine.Core.Domain.Values;
 using EldEngine.GameTest.GameStates;
@@ -223,6 +224,21 @@ namespace EldEngine.GameTest
                 Debug.WriteLine("║  Presiona ESC o CTRL+Q en menú para    ║");
                 Debug.WriteLine("║  salir del juego                       ║");
                 Debug.WriteLine("╚════════════════════════════════════════╝\n");
+
+                // Inicializar SpriteAssetManager
+                var assetManager = new SpriteAssetManager();
+                _gameService.SetAssetManager(assetManager);
+
+                // Cargar spritesheets
+                LoadSpritesheets(assetManager);
+
+                // Agregar sistemas
+                _gameService.World.AddSystem(
+                    new AnimationSystem());
+                _gameService.World.AddSystem(
+                    new SpriteRenderSystem(assetManager, _renderContext));
+
+                Console.WriteLine("[GameWindow] Sistemas de sprite inicializados");
             }
             catch (Exception ex)
             {
@@ -231,6 +247,25 @@ namespace EldEngine.GameTest
                     "Error Fatal", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 this.Close();
             }
+        }
+
+        private void LoadSpritesheets(SpriteAssetManager assetManager)
+        {
+            // Ejemplo: Cargar jugador
+            assetManager.LoadSpriteSheet(
+                spritesheetId: "player",
+                imagePath: "player.png",
+                tileWidth: 32,
+                tileHeight: 32);
+
+            // Ejemplo: Cargar enemigos
+            assetManager.LoadSpriteSheet(
+                spritesheetId: "enemies",
+                imagePath: "enemies.png",
+                tileWidth: 32,
+                tileHeight: 32);
+
+            Console.WriteLine("[LoadSpritesheets] Spritesheets cargados");
         }
 
         private void GameWindow_KeyDown(object? sender, KeyEventArgs e)

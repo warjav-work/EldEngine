@@ -11,7 +11,18 @@ namespace EldEngine.GameTest
             // To customize application configuration such as set high DPI settings or default font,
             // see https://aka.ms/applicationconfiguration.
             ApplicationConfiguration.Initialize();
-            Application.Run(new GameWindow());
+            try
+            {
+                var gameWindow = new GameWindow();
+                Application.Run(gameWindow);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error crítico: {ex.Message}\n{ex.StackTrace}",
+                    "EldEngine.GameTest - Error Fatal",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
         }
     }
 }

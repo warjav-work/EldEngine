@@ -10,6 +10,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\EldEngine.Core\EldEngine.Core.csproj" />
+    <None Update="Assets/**/*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

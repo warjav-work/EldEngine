@@ -1,4 +1,5 @@
-﻿using EldEngine.Core.Domain.Worlds;
+﻿using EldEngine.Core.Application.Services;
+using EldEngine.Core.Domain.Worlds;
 
 namespace EldEngine.Core.Application.Interfaces
 {
@@ -13,6 +14,8 @@ namespace EldEngine.Core.Application.Interfaces
         void Update(float deltaTime);
         void LoadScene(string sceneName);
         void SaveScene(string scenePath);
+
+        void SetAssetManager(SpriteAssetManager manager);
 
         event Action<string> OnError;
         event Action OnInitialized;
